@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Auth } from "@/components/Auth";
+import { Landing } from "@/components/Landing";
 import { VoiceInput } from "@/components/VoiceInput";
 import { PantryInventory } from "@/components/PantryInventory";
 import { MealSuggestions } from "@/components/MealSuggestions";
@@ -142,7 +142,7 @@ const Index = () => {
   }
 
   if (!user) {
-    return <Auth />;
+    return <Landing />;
   }
 
   const lowStockItems = pantryItems.filter((item) => item.is_low);
