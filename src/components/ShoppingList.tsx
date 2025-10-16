@@ -25,7 +25,7 @@ export const ShoppingList = ({ items }: ShoppingListProps) => {
             <Badge
               key={index}
               variant="secondary"
-              className="text-base py-2 px-4 bg-secondary/10 hover:bg-secondary/20"
+              className="text-base py-2 px-4 bg-secondary/10 text-secondary-foreground hover:bg-secondary/20"
             >
               {item}
             </Badge>
