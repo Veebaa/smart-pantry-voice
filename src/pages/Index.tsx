@@ -19,6 +19,8 @@ interface PantryItem {
   category: string;
   quantity?: string;
   is_low: boolean;
+  current_quantity?: number | null;
+  low_stock_threshold?: number | null;
 }
 
 interface AssistantResponse {
@@ -221,7 +223,7 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
-            <PantryInventory items={pantryItems} onDelete={handleDeleteItem} />
+            <PantryInventory items={pantryItems} onDelete={handleDeleteItem} onUpdate={fetchPantryItems} />
           </TabsContent>
 
           <TabsContent value="meals">

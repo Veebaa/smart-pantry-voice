@@ -4,6 +4,7 @@ import { Trash2, Refrigerator, Wind, Package, Pizza } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { ItemThresholdDialog } from "./ItemThresholdDialog";
 
 interface PantryItem {
   id: string;
@@ -11,11 +12,14 @@ interface PantryItem {
   category: string;
   quantity?: string;
   is_low: boolean;
+  current_quantity?: number | null;
+  low_stock_threshold?: number | null;
 }
 
 interface PantryInventoryProps {
   items: PantryItem[];
   onDelete: (id: string) => void;
+  onUpdate: () => void;
 }
 
 const categoryIcons = {
@@ -32,7 +36,7 @@ const categoryLabels = {
   pantry_staples: "Pantry Staples",
 };
 
-export const PantryInventory = ({ items, onDelete }: PantryInventoryProps) => {
+export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryProps) => {
   const groupedItems = items.reduce((acc, item) => {
     if (!acc[item.category]) {
       acc[item.category] = [];
@@ -75,7 +79,12 @@ export const PantryInventory = ({ items, onDelete }: PantryInventoryProps) => {
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{item.name}</span>
-                    {item.quantity && (
+                    {item.current_quantity !== null && item.current_quantity !== undefined ? (
+                      <span className="text-sm text-muted-foreground">
+                        Qty: {item.current_quantity}
+                        {item.low_stock_threshold && ` / Alert at: ${item.low_stock_threshold}`}
+                      </span>
+                    ) : item.quantity && (
                       <span className="text-sm text-muted-foreground">({item.quantity})</span>
                     )}
                     {item.is_low && (
@@ -84,14 +93,23 @@ export const PantryInventory = ({ items, onDelete }: PantryInventoryProps) => {
                       </Badge>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(item.id)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <ItemThresholdDialog
+                      itemId={item.id}
+                      itemName={item.name}
+                      currentQuantity={item.current_quantity}
+                      threshold={item.low_stock_threshold}
+                      onUpdate={onUpdate}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(item.id)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

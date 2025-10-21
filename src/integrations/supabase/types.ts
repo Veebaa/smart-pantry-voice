@@ -18,8 +18,10 @@ export type Database = {
         Row: {
           added_at: string | null
           category: string
+          current_quantity: number | null
           id: string
           is_low: boolean | null
+          low_stock_threshold: number | null
           name: string
           quantity: string | null
           updated_at: string | null
@@ -28,8 +30,10 @@ export type Database = {
         Insert: {
           added_at?: string | null
           category: string
+          current_quantity?: number | null
           id?: string
           is_low?: boolean | null
+          low_stock_threshold?: number | null
           name: string
           quantity?: string | null
           updated_at?: string | null
@@ -38,8 +42,10 @@ export type Database = {
         Update: {
           added_at?: string | null
           category?: string
+          current_quantity?: number | null
           id?: string
           is_low?: boolean | null
+          low_stock_threshold?: number | null
           name?: string
           quantity?: string | null
           updated_at?: string | null
