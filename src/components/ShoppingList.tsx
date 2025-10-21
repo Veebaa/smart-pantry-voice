@@ -24,8 +24,8 @@ export const ShoppingList = ({ items }: ShoppingListProps) => {
           {items.map((item, index) => (
             <Badge
               key={index}
-              variant="secondary"
-              className="text-base py-2 px-4 bg-secondary/10 text-secondary-foreground hover:bg-secondary/20"
+              variant="outline"
+              className="text-base py-2 px-4 bg-muted text-foreground hover:bg-muted/90"
             >
               {item}
             </Badge>
