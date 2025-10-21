@@ -41,16 +41,13 @@ export const ItemThresholdDialog = ({
         current_quantity: number | null;
         low_stock_threshold: number | null;
       } = {
-        current_quantity: quantity && quantity.trim() !== "" ? Number(quantity) : null,
-        low_stock_threshold: lowThreshold && lowThreshold.trim() !== "" ? Number(lowThreshold) : null,
+        current_quantity: quantity.trim() !== "" ? parseFloat(quantity) : null,
+        low_stock_threshold: lowThreshold.trim() !== "" ? parseFloat(lowThreshold) : null,
       };
 
       console.log("Saving item data:", updateData);
 
-      const { error } = await supabase
-        .from("pantry_items")
-        .update(updateData)
-        .eq("id", itemId);
+      const { error } = await supabase.from("pantry_items").update(updateData).eq("id", itemId);
 
       if (error) throw error;
 
@@ -85,8 +82,8 @@ export const ItemThresholdDialog = ({
               id="quantity"
               type="number"
               min="0"
-              step="1"
-              placeholder="e.g., 5"
+              step="any" // <-- allow floats
+              placeholder="e.g., 5 or 2.5"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
             />
@@ -97,8 +94,8 @@ export const ItemThresholdDialog = ({
               id="threshold"
               type="number"
               min="0"
-              step="1"
-              placeholder="e.g., 2"
+              step="any" // <-- allow floats
+              placeholder="e.g., 2 or 0.5"
               value={lowThreshold}
               onChange={(e) => setLowThreshold(e.target.value)}
             />

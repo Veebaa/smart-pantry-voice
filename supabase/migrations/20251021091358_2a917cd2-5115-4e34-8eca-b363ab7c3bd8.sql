@@ -1,35 +1,41 @@
--- Add low_stock_threshold column to pantry_items
-ALTER TABLE public.pantry_items 
-ADD COLUMN low_stock_threshold integer DEFAULT NULL;
+-- ===================================
+-- Pantry Items Stock Level Migrations
+-- ===================================
 
-COMMENT ON COLUMN public.pantry_items.low_stock_threshold IS 'Threshold quantity - when current quantity falls below this, item is marked as low';
+-- 1. Convert existing columns to DOUBLE PRECISION (floats)
+ALTER TABLE public.pantry_items
+  ALTER COLUMN current_quantity TYPE DOUBLE PRECISION USING current_quantity::double precision,
+  ALTER COLUMN low_stock_threshold TYPE DOUBLE PRECISION USING low_stock_threshold::double precision;
 
--- Add current_quantity column to track numeric quantities
-ALTER TABLE public.pantry_items 
-ADD COLUMN current_quantity integer DEFAULT NULL;
+-- 2. Add comments for clarity
+COMMENT ON COLUMN public.pantry_items.current_quantity IS 'Current numeric quantity of the item (supports decimals)';
+COMMENT ON COLUMN public.pantry_items.low_stock_threshold IS 'Threshold quantity - when current quantity falls below this, item is marked as low (supports decimals)';
 
-COMMENT ON COLUMN public.pantry_items.current_quantity IS 'Current numeric quantity of the item';
+-- 3. Drop existing trigger and function if they exist
+DROP TRIGGER IF EXISTS trigger_check_low_stock ON public.pantry_items;
+DROP FUNCTION IF EXISTS public.check_low_stock();
 
--- Create or replace function to automatically check low stock
+-- 4. Create or replace function to automatically check low stock (works with floats)
 CREATE OR REPLACE FUNCTION public.check_low_stock()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- If both current_quantity and threshold are set, check if low
+  -- Only check if both quantities are set
   IF NEW.current_quantity IS NOT NULL AND NEW.low_stock_threshold IS NOT NULL THEN
+    -- Mark item as low if current_quantity <= threshold
     IF NEW.current_quantity <= NEW.low_stock_threshold THEN
-      NEW.is_low = true;
+      NEW.is_low = TRUE;
     ELSE
-      NEW.is_low = false;
+      NEW.is_low = FALSE;
     END IF;
   END IF;
-  
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Create trigger to automatically update is_low when quantities change
+-- 5. Recreate trigger for INSERT or UPDATE on quantity fields
 CREATE TRIGGER trigger_check_low_stock
-  BEFORE INSERT OR UPDATE OF current_quantity, low_stock_threshold
-  ON public.pantry_items
-  FOR EACH ROW
-  EXECUTE FUNCTION public.check_low_stock();
+BEFORE INSERT OR UPDATE OF current_quantity, low_stock_threshold
+ON public.pantry_items
+FOR EACH ROW
+EXECUTE FUNCTION public.check_low_stock();

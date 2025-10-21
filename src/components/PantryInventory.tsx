@@ -38,20 +38,21 @@ const categoryLabels = {
 
 export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryProps) => {
   const groupedItems = items.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
+    // Coerce to float for safety
+    const currentQty = item.current_quantity != null ? parseFloat(String(item.current_quantity)) : null;
+    const lowThreshold = item.low_stock_threshold != null ? parseFloat(String(item.low_stock_threshold)) : null;
+
+    const normalizedItem = { ...item, current_quantity: currentQty, low_stock_threshold: lowThreshold };
+
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(normalizedItem);
+
     return acc;
   }, {} as Record<string, PantryItem[]>);
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("pantry_items")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("pantry_items").delete().eq("id", id);
       if (error) throw error;
       onDelete(id);
       toast.success("Item removed from pantry");
@@ -79,14 +80,15 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{item.name}</span>
-                    {item.current_quantity !== null && item.current_quantity !== undefined ? (
+                    {item.current_quantity != null ? (
                       <span className="text-sm text-muted-foreground">
-                        Qty: {item.current_quantity}
-                        {item.low_stock_threshold && ` / Alert at: ${item.low_stock_threshold}`}
+                        Qty: {item.current_quantity.toFixed(2).replace(/\.00$/, "")}
+                        {item.low_stock_threshold != null &&
+                          ` / Alert at: ${item.low_stock_threshold.toFixed(2).replace(/\.00$/, "")}`}
                       </span>
-                    ) : item.quantity && (
+                    ) : item.quantity ? (
                       <span className="text-sm text-muted-foreground">({item.quantity})</span>
-                    )}
+                    ) : null}
                     {item.is_low && (
                       <Badge variant="destructive" className="text-xs">
                         Running Low
@@ -97,8 +99,8 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                     <ItemThresholdDialog
                       itemId={item.id}
                       itemName={item.name}
-                      currentQuantity={item.current_quantity}
-                      threshold={item.low_stock_threshold}
+                      currentQuantity={item.current_quantity ?? null}
+                      threshold={item.low_stock_threshold ?? null}
                       onUpdate={onUpdate}
                     />
                     <Button
