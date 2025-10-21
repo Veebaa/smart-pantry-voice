@@ -8,6 +8,7 @@ import { ShoppingList } from "@/components/ShoppingList";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LogOut, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -173,27 +174,6 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Low Stock Alert */}
-        {lowStockItems.length > 0 && (
-          <Card className="mb-6 border-destructive/50 bg-destructive/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-5 w-5" />
-                Running Low ({lowStockItems.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {lowStockItems.map((item) => (
-                  <Badge key={item.id} variant="destructive">
-                    {item.name}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Voice Input Section */}
         <Card className="mb-8 overflow-hidden shadow-lg">
           <div className="bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 p-8">
@@ -212,23 +192,64 @@ const Index = () => {
           </div>
         </Card>
 
-        {/* AI Response Sections */}
-        {assistantResponse && (
-          <div className="space-y-6 mb-8">
-            {assistantResponse.meal_suggestions && assistantResponse.meal_suggestions.length > 0 && (
-              <MealSuggestions meals={assistantResponse.meal_suggestions} />
-            )}
-            {assistantResponse.shopping_list && assistantResponse.shopping_list.length > 0 && (
-              <ShoppingList items={assistantResponse.shopping_list} />
-            )}
-          </div>
-        )}
+        {/* Tabbed Navigation */}
+        <Tabs defaultValue="pantry" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="pantry">Your Pantry</TabsTrigger>
+            <TabsTrigger value="meals">Meal Suggestions</TabsTrigger>
+            <TabsTrigger value="shopping">Shopping List</TabsTrigger>
+          </TabsList>
 
-        {/* Pantry Inventory */}
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Your Pantry</h2>
-          <PantryInventory items={pantryItems} onDelete={handleDeleteItem} />
-        </div>
+          <TabsContent value="pantry" className="space-y-6">
+            {/* Low Stock Alert */}
+            {lowStockItems.length > 0 && (
+              <Card className="border-destructive/50 bg-destructive/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-destructive">
+                    <AlertCircle className="h-5 w-5" />
+                    Running Low ({lowStockItems.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {lowStockItems.map((item) => (
+                      <Badge key={item.id} variant="destructive">
+                        {item.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            <PantryInventory items={pantryItems} onDelete={handleDeleteItem} />
+          </TabsContent>
+
+          <TabsContent value="meals">
+            {assistantResponse?.meal_suggestions && assistantResponse.meal_suggestions.length > 0 ? (
+              <MealSuggestions meals={assistantResponse.meal_suggestions} />
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  <p>Ask for meal suggestions using voice commands!</p>
+                  <p className="text-sm mt-2">Try saying: "What can I cook?" or "Suggest meals"</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="shopping">
+            {assistantResponse?.shopping_list && assistantResponse.shopping_list.length > 0 ? (
+              <ShoppingList items={assistantResponse.shopping_list} />
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  <p>Your shopping list will appear here</p>
+                  <p className="text-sm mt-2">Try saying: "Create shopping list" or "What do I need?"</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
