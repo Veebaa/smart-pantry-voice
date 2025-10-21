@@ -10,13 +10,13 @@ export const Landing = () => {
         <div className="text-center space-y-6 mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full mb-4">
             <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">AI-Powered Kitchen Assistant</span>
+            <span className="text-sm font-medium text-primary">Voice-enabled</span>
           </div>
           
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent leading-tight">
-            Your Smart Pantry,
+            Sage,
             <br />
-            Voice-Enabled
+            Your AI-Powered Kitchen Assistant
           </h1>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
@@ -34,7 +34,7 @@ export const Landing = () => {
               </div>
               <h3 className="text-lg font-semibold mb-2">Voice Control</h3>
               <p className="text-sm text-muted-foreground">
-                Simply say "add milk to fridge" or "low on olive oil"—your pantry updates instantly with smart categorization.
+                Simply say "add milk to fridge" or "low on olive oil"—your pantry updates instantly with smart categorisation.
               </p>
             </CardContent>
           </Card>
