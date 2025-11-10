@@ -157,7 +157,7 @@ const Index = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Smart Pantry Voice
+              Sage
             </h1>
             <p className="text-muted-foreground mt-1">
               Your AI-powered kitchen assistant
