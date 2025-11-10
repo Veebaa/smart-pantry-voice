@@ -102,8 +102,29 @@ Parse their voice command and:
                   properties: {
                     name: { type: "string" },
                     ingredients_available: { type: "array", items: { type: "string" } },
-                    ingredients_needed: { type: "array", items: { type: "string" } }
-                  }
+                    ingredients_needed: { type: "array", items: { type: "string" } },
+                    recipe: {
+                      type: "object",
+                      properties: {
+                        ingredients_with_quantities: { 
+                          type: "array", 
+                          items: { type: "string" },
+                          description: "List of ingredients with specific quantities, e.g. '2 cups milk', '1 tablespoon olive oil'"
+                        },
+                        cooking_steps: { 
+                          type: "array", 
+                          items: { type: "string" },
+                          description: "Step-by-step cooking instructions"
+                        },
+                        tips: { 
+                          type: "string",
+                          description: "Helpful cooking tips or notes"
+                        }
+                      },
+                      required: ["ingredients_with_quantities", "cooking_steps"]
+                    }
+                  },
+                  required: ["name", "recipe"]
                 }
               },
               shopping_list: {
