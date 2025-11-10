@@ -20,7 +20,7 @@ export const Landing = () => {
           </h1>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Manage your food inventory hands-free with voice commands. Get personalized meal suggestions, 
+            Manage your food inventory hands-free with voice commands. Get personalised meal suggestions, 
             track ingredients, and never forget what's running low—all tailored to your dietary needs and household size.
           </p>
         </div>
@@ -75,7 +75,7 @@ export const Landing = () => {
               <div>
                 <h3 className="text-xl font-semibold mb-2">Speak Naturally</h3>
                 <p className="text-muted-foreground">
-                  Use your voice to add or update items: "add two cartons of milk to the fridge" or "running low on pasta."
+                  Use your voice to add or update items: "add two litres of milk to the fridge" or "running low on pasta."
                   The assistant understands you and organizes everything automatically.
                 </p>
               </div>
@@ -86,7 +86,7 @@ export const Landing = () => {
                 2
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-2">Get Personalized Suggestions</h3>
+                <h3 className="text-xl font-semibold mb-2">Get Personalised Suggestions</h3>
                 <p className="text-muted-foreground">
                   Based on your current inventory, dietary restrictions (vegetarian, vegan, gluten-free, etc.), 
                   and household size, receive tailored meal ideas you can make right now.

@@ -37,7 +37,7 @@ export const Auth = () => {
       <Card className="w-full max-w-md shadow-2xl border-0">
         <CardHeader className="space-y-1">
           <CardTitle className="text-3xl font-bold text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Smart Pantry Voice
+            Sage
           </CardTitle>
           <CardDescription className="text-center text-base">
             Your AI-powered pantry and meal planning assistant
