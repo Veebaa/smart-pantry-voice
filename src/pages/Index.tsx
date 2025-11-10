@@ -160,7 +160,7 @@ const Index = () => {
               Sage
             </h1>
             <p className="text-muted-foreground mt-1">
-              Your AI-powered kitchen assistant
+              Welcome back, {user?.email}
             </p>
           </div>
           <div className="flex items-center gap-3">
