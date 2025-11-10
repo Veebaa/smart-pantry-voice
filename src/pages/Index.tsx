@@ -6,6 +6,7 @@ import { PantryInventory } from "@/components/PantryInventory";
 import { MealSuggestions } from "@/components/MealSuggestions";
 import { ShoppingList } from "@/components/ShoppingList";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { RecipeFilters, RecipeFilter } from "@/components/RecipeFilters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +37,15 @@ const Index = () => {
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [assistantResponse, setAssistantResponse] = useState<AssistantResponse | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
+    { id: "vegetarian", label: "Vegetarian", active: false },
+    { id: "vegan", label: "Vegan", active: false },
+    { id: "gluten_free", label: "Gluten-free", active: false },
+    { id: "dairy_free", label: "Dairy-free", active: false },
+    { id: "nut_free", label: "Nut-free", active: false },
+    { id: "quick_meals", label: "Quick meals (< 30 min)", active: false },
+    { id: "kid_friendly", label: "Kid-friendly", active: false },
+  ]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -103,12 +113,18 @@ const Index = () => {
         .eq("user_id", user.id)
         .single();
 
+      // Get active recipe filters
+      const activeFilters = recipeFilters
+        .filter((f) => f.active)
+        .map((f) => f.id);
+
       const { data, error } = await supabase.functions.invoke("pantry-assistant", {
         body: {
           voiceInput: transcript,
           action: "process_voice",
           dietaryRestrictions: settings?.dietary_restrictions || [],
           householdSize: settings?.household_size || 2,
+          recipeFilters: activeFilters,
         },
       });
 
@@ -125,6 +141,14 @@ const Index = () => {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleFilterToggle = (filterId: string) => {
+    setRecipeFilters((prev) =>
+      prev.map((filter) =>
+        filter.id === filterId ? { ...filter, active: !filter.active } : filter
+      )
+    );
   };
 
   const handleSignOut = async () => {
@@ -226,7 +250,16 @@ const Index = () => {
             <PantryInventory items={pantryItems} onDelete={handleDeleteItem} onUpdate={fetchPantryItems} />
           </TabsContent>
 
-          <TabsContent value="meals">
+          <TabsContent value="meals" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Customize Your Meal Suggestions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RecipeFilters filters={recipeFilters} onFilterToggle={handleFilterToggle} />
+              </CardContent>
+            </Card>
+            
             {assistantResponse?.meal_suggestions && assistantResponse.meal_suggestions.length > 0 ? (
               <MealSuggestions meals={assistantResponse.meal_suggestions} />
             ) : (

@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { voiceInput, action, dietaryRestrictions, householdSize } = await req.json();
+    const { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters } = await req.json();
     
-    console.log("Received request:", { voiceInput, action, dietaryRestrictions, householdSize });
+    console.log("Received request:", { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -55,7 +55,22 @@ Current pantry inventory:
 ${JSON.stringify(pantryItems, null, 2)}
 
 Dietary restrictions: ${dietaryRestrictions?.join(", ") || "None"}
-Household size: ${householdSize || 2} people`;
+Household size: ${householdSize || 2} people
+
+Recipe preferences: ${recipeFilters && recipeFilters.length > 0 ? recipeFilters.map((f: string) => {
+  const filterMap: Record<string, string> = {
+    vegetarian: "Vegetarian (no meat)",
+    vegan: "Vegan (no animal products)",
+    gluten_free: "Gluten-free",
+    dairy_free: "Dairy-free",
+    nut_free: "Nut-free",
+    quick_meals: "Quick meals under 30 minutes",
+    kid_friendly: "Kid-friendly (mild flavors, familiar ingredients)"
+  };
+  return filterMap[f] || f;
+}).join(", ") : "No specific preferences"}
+
+IMPORTANT: When suggesting meals, STRICTLY adhere to all active recipe preferences. Only suggest recipes that match ALL selected filters.`;
 
     if (action === "process_voice") {
       systemPrompt += `\n\nThe user said: "${voiceInput}"
