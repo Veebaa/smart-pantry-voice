@@ -19,6 +19,79 @@ interface MealSuggestionsProps {
 }
 
 export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchFavorites();
+  }, []);
+
+  const fetchFavorites = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("favorite_recipes")
+        .select("recipe_name")
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      setFavorites(data?.map(f => f.recipe_name) || []);
+    } catch (error) {
+      console.error("Error fetching favorites:", error);
+    }
+  };
+
+  const handleToggleFavorite = async (meal: MealSuggestion) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const isFavorite = favorites.includes(meal.name);
+
+      if (isFavorite) {
+        const { error } = await supabase
+          .from("favorite_recipes")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("recipe_name", meal.name);
+
+        if (error) throw error;
+        setFavorites(favorites.filter(f => f !== meal.name));
+        toast({
+          title: "Removed from favorites",
+          description: `${meal.name} has been removed from your favorites`,
+        });
+      } else {
+        const { error } = await supabase
+          .from("favorite_recipes")
+          .insert({
+            user_id: user.id,
+            recipe_name: meal.name,
+            recipe_data: {
+              ingredients_available: meal.ingredients_available,
+              ingredients_needed: meal.ingredients_needed,
+              recipe: meal.recipe,
+            },
+          });
+
+        if (error) throw error;
+        setFavorites([...favorites, meal.name]);
+        toast({
+          title: "Added to favorites",
+          description: `${meal.name} has been saved to your favorites`,
+        });
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update favorite",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!meals || meals.length === 0) {
     return null;
   }
