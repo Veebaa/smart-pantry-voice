@@ -41,7 +41,7 @@ export const FavoriteRecipes = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setFavorites(data || []);
+      setFavorites((data as FavoriteRecipe[]) || []);
     } catch (error) {
       console.error("Error fetching favorites:", error);
       toast({

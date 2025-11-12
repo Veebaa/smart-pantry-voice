@@ -1,7 +1,11 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ChefHat, Check, ShoppingCart, CookingPot } from "lucide-react";
+import { ChefHat, Check, ShoppingCart, CookingPot, Heart } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface MealSuggestion {
   name: string;
@@ -109,9 +113,25 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
           {meals.map((meal, index) => (
             <AccordionItem key={index} value={`meal-${index}`} className="border rounded-lg px-4">
               <AccordionTrigger className="hover:no-underline">
-                <div className="flex items-center gap-3 text-left">
-                  <CookingPot className="h-5 w-5 text-primary flex-shrink-0" />
-                  <h3 className="text-lg font-semibold text-primary">{meal.name}</h3>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="flex items-center gap-3 text-left">
+                    <CookingPot className="h-5 w-5 text-primary flex-shrink-0" />
+                    <h3 className="text-lg font-semibold text-primary">{meal.name}</h3>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleFavorite(meal);
+                    }}
+                  >
+                    <Heart
+                      className={`h-4 w-4 ${
+                        favorites.includes(meal.name) ? "fill-current" : ""
+                      }`}
+                    />
+                  </Button>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
