@@ -7,6 +7,7 @@ import { MealSuggestions } from "@/components/MealSuggestions";
 import { ShoppingList } from "@/components/ShoppingList";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { RecipeFilters, RecipeFilter } from "@/components/RecipeFilters";
+import { FavoriteRecipes } from "@/components/FavoriteRecipes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -220,9 +221,10 @@ const Index = () => {
 
         {/* Tabbed Navigation */}
         <Tabs defaultValue="pantry" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="pantry">Your Pantry</TabsTrigger>
             <TabsTrigger value="meals">Meal Suggestions</TabsTrigger>
+            <TabsTrigger value="favorites">Favorites</TabsTrigger>
             <TabsTrigger value="shopping">Shopping List</TabsTrigger>
           </TabsList>
 
@@ -270,6 +272,10 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="favorites">
+            <FavoriteRecipes />
           </TabsContent>
 
           <TabsContent value="shopping">
