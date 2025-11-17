@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters } = await req.json();
+    const { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters, pendingClarification } = await req.json();
     
-    console.log("Received request:", { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters });
+    console.log("Received request:", { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters, pendingClarification });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -73,15 +73,24 @@ Recipe preferences: ${recipeFilters && recipeFilters.length > 0 ? recipeFilters.
 IMPORTANT: When suggesting meals, STRICTLY adhere to all active recipe preferences. Only suggest recipes that match ALL selected filters.`;
 
     if (action === "process_voice") {
-      systemPrompt += `\n\nThe user said: "${voiceInput}"
+      if (pendingClarification) {
+        systemPrompt += `\n\nThe user is answering a clarification question about: "${pendingClarification.item}"
+User's response: "${voiceInput}"
+
+Based on their answer, categorize the item "${pendingClarification.item}" appropriately and add it to the pantry.
+Then provide a warm confirmation and continue with meal suggestions.`;
+      } else {
+        systemPrompt += `\n\nThe user said: "${voiceInput}"
 
 Parse their voice command and:
 1. Identify items to add/update (e.g., "add milk to fridge", "low on olive oil")
-2. Categorize items into: fridge, freezer, cupboard, or pantry_staples
-3. Mark items as low stock if indicated
-4. Return structured data for database updates
-5. Suggest meals using available ingredients
-6. Generate shopping list for missing ingredients`;
+2. For items that could go in multiple categories (like salmon, meat, etc.), set needsClarification: true and suggest options
+3. Categorize clear items into: fridge, freezer, cupboard, or pantry_staples
+4. Mark items as low stock if indicated
+5. Return structured data for database updates
+6. Suggest meals using available ingredients
+7. Generate shopping list for missing ingredients`;
+      }
     }
 
     // Define tool for structured pantry updates
@@ -105,7 +114,12 @@ Parse their voice command and:
                       enum: ["fridge", "freezer", "cupboard", "pantry_staples"]
                     },
                     quantity: { type: "string" },
-                    is_low: { type: "boolean" }
+                    is_low: { type: "boolean" },
+                    needsClarification: { type: "boolean" },
+                    clarificationOptions: {
+                      type: "array",
+                      items: { type: "string" }
+                    }
                   },
                   required: ["name", "category"]
                 }
@@ -146,7 +160,18 @@ Parse their voice command and:
                 type: "array",
                 items: { type: "string" }
               },
-              confirmation_message: { type: "string" }
+              confirmation_message: {
+                type: "string",
+                description: "Friendly confirmation message"
+              },
+              needsClarification: {
+                type: "boolean",
+                description: "True if any items need category clarification"
+              },
+              clarificationMessage: {
+                type: "string",
+                description: "Question to ask user for clarification"
+              }
             },
             required: ["confirmation_message"],
             additionalProperties: false
@@ -202,6 +227,23 @@ Parse their voice command and:
 
     const parsedData = JSON.parse(toolCall.function.arguments);
     console.log("Parsed data:", parsedData);
+
+    // Check if clarification is needed
+    const itemsNeedingClarification = parsedData.items_to_add?.filter((item: any) => item.needsClarification);
+    
+    if (itemsNeedingClarification && itemsNeedingClarification.length > 0) {
+      console.log("Items need clarification:", itemsNeedingClarification);
+      return new Response(
+        JSON.stringify({
+          ...parsedData,
+          needsClarification: true,
+          pendingItem: itemsNeedingClarification[0],
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Update database if items to add
     if (parsedData.items_to_add && parsedData.items_to_add.length > 0) {

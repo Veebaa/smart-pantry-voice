@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LogOut, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { useVoiceOutput } from "@/hooks/useVoiceOutput";
 
 interface PantryItem {
   id: string;
@@ -30,6 +31,9 @@ interface AssistantResponse {
   meal_suggestions?: any[];
   shopping_list?: string[];
   confirmation_message?: string;
+  needsClarification?: boolean;
+  clarificationMessage?: string;
+  pendingItem?: any;
 }
 
 const Index = () => {
@@ -38,6 +42,8 @@ const Index = () => {
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [assistantResponse, setAssistantResponse] = useState<AssistantResponse | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [pendingClarification, setPendingClarification] = useState<any>(null);
+  const { speak, isSpeaking } = useVoiceOutput();
   const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
     { id: "vegetarian", label: "Vegetarian", active: false },
     { id: "vegan", label: "Vegan", active: false },
@@ -119,22 +125,50 @@ const Index = () => {
         .filter((f) => f.active)
         .map((f) => f.id);
 
-      const { data, error } = await supabase.functions.invoke("pantry-assistant", {
-        body: {
-          voiceInput: transcript,
-          action: "process_voice",
-          dietaryRestrictions: settings?.dietary_restrictions || [],
-          householdSize: settings?.household_size || 2,
-          recipeFilters: activeFilters,
-        },
-      });
+      // Check if we're answering a clarification question
+      const requestBody: any = {
+        voiceInput: transcript,
+        action: "process_voice",
+        dietaryRestrictions: settings?.dietary_restrictions || [],
+        householdSize: settings?.household_size || 2,
+        recipeFilters: activeFilters,
+      };
+
+      if (pendingClarification) {
+        requestBody.pendingClarification = pendingClarification;
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "pantry-assistant",
+        { body: requestBody }
+      );
 
       if (error) throw error;
 
-      setAssistantResponse(data);
+      console.log("Assistant response:", data);
       
-      if (data.confirmation_message) {
-        toast.success(data.confirmation_message);
+      // Handle clarification needed
+      if (data.needsClarification) {
+        setPendingClarification(data.pendingItem);
+        setAssistantResponse(data);
+        
+        // Speak the clarification message
+        if (data.clarificationMessage) {
+          speak(data.clarificationMessage);
+        }
+        
+        toast.info("Please clarify your response");
+      } else {
+        // Clear any pending clarification
+        setPendingClarification(null);
+        setAssistantResponse(data);
+        
+        // Speak the confirmation message
+        if (data.confirmation_message) {
+          speak(data.confirmation_message);
+        }
+        
+        toast.success("Voice command processed!");
       }
     } catch (error: any) {
       console.error("Error processing voice input:", error);
@@ -207,13 +241,24 @@ const Index = () => {
             <div className="text-center space-y-4">
               <h2 className="text-2xl font-semibold">Add Items with Your Voice</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Try saying: "Add milk to the fridge" or "I'm running low on olive oil"
+                {pendingClarification 
+                  ? "Please answer the question" 
+                  : 'Try saying: "Add milk to the fridge" or "I\'m running low on olive oil"'}
               </p>
+              {pendingClarification && assistantResponse?.clarificationMessage && (
+                <div className="p-4 bg-accent/50 rounded-lg max-w-md mx-auto">
+                  <p className="text-sm font-medium">
+                    {assistantResponse.clarificationMessage}
+                  </p>
+                </div>
+              )}
               <div className="flex justify-center pt-4">
-                <VoiceInput onTranscript={handleVoiceInput} disabled={processing} />
+                <VoiceInput onTranscript={handleVoiceInput} disabled={processing || isSpeaking} />
               </div>
-              {processing && (
-                <p className="text-sm text-primary animate-pulse">Processing your request...</p>
+              {(processing || isSpeaking) && (
+                <p className="text-sm text-primary animate-pulse">
+                  {isSpeaking ? "Speaking..." : "Processing your request..."}
+                </p>
               )}
             </div>
           </div>
