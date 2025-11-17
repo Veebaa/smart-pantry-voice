@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      favorite_recipes: {
+        Row: {
+          created_at: string
+          id: string
+          recipe_data: Json
+          recipe_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recipe_data: Json
+          recipe_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recipe_data?: Json
+          recipe_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pantry_items: {
         Row: {
           added_at: string | null
