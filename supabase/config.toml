@@ -1,1 +1,7 @@
 project_id = "mhiaopicttdjcschrqoh"
+
+[functions.pantry-assistant]
+verify_jwt = true
+
+[functions.elevenlabs-tts]
+verify_jwt = true
