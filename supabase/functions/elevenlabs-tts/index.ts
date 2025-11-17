@@ -1,30 +1,61 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Some environments/typecheckers may not include Deno types; keep a simple declaration
+declare const Deno: any;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-serve(async (req) => {
+// Utility: Convert ArrayBuffer to Base64 safely in chunks
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // 32KB per chunk
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Only accept POST for TTS generation
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
-    const { text, voiceId, language } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { text, voiceId, language } = body as { text?: string; voiceId?: string; language?: string };
 
     if (!text) {
-      throw new Error("Text is required");
+      return new Response(JSON.stringify({ error: "Text is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
     if (!ELEVENLABS_API_KEY) {
-      throw new Error("ELEVENLABS_API_KEY not configured");
+      return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log("Generating speech:", { text, voiceId, language });
 
-    // Use the appropriate voice ID based on language/accent
+    // Use default voice if not provided
     const finalVoiceId = voiceId || "9BWtsMINqrJLrRacOk9x"; // Default: Aria
 
     const response = await fetch(
@@ -47,15 +78,16 @@ serve(async (req) => {
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("ElevenLabs API error:", errorText);
-      throw new Error(`ElevenLabs API error: ${response.status}`);
+      const errorText = await response.text().catch(() => "");
+      console.error("ElevenLabs API error:", response.status, errorText);
+      return new Response(
+        JSON.stringify({ error: `ElevenLabs API error: ${response.status}`, details: errorText }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const audioBuffer = await response.arrayBuffer();
-    const base64Audio = btoa(
-      String.fromCharCode(...new Uint8Array(audioBuffer))
-    );
+    const base64Audio = arrayBufferToBase64(audioBuffer);
 
     return new Response(
       JSON.stringify({ audioContent: base64Audio }),
@@ -63,10 +95,11 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error: any) {
-    console.error("Error in elevenlabs-tts:", error);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error in elevenlabs-tts:", message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
