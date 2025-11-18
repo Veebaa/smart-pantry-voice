@@ -26,23 +26,24 @@ interface PantryItem {
   low_stock_threshold?: number | null;
 }
 
-interface AssistantResponse {
-  items_to_add?: any[];
-  meal_suggestions?: any[];
-  shopping_list?: string[];
-  confirmation_message?: string;
-  needsClarification?: boolean;
-  clarificationMessage?: string;
-  pendingItem?: any;
+interface SageResponse {
+  action: "add_item" | "update_item" | "ask" | "none";
+  payload?: {
+    items?: any[];
+    meal_suggestions?: any[];
+    shopping_list?: string[];
+    pending_item?: string;
+  };
+  speak: string;
 }
 
 const Index = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
-  const [assistantResponse, setAssistantResponse] = useState<AssistantResponse | null>(null);
+  const [sageResponse, setSageResponse] = useState<SageResponse | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [pendingClarification, setPendingClarification] = useState<any>(null);
+  const [lastItem, setLastItem] = useState<string | null>(null);
   const { speak, isSpeaking } = useVoiceOutput();
   const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
     { id: "vegetarian", label: "Vegetarian", active: false },

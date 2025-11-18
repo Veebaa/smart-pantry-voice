@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters, pendingClarification } = await req.json();
+    const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem } = await req.json();
     
-    console.log("Received request:", { voiceInput, action, dietaryRestrictions, householdSize, recipeFilters, pendingClarification });
+    console.log("Received request:", { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -42,17 +42,25 @@ serve(async (req) => {
 
     console.log("Fetched pantry items:", pantryItems);
 
-    // Build system prompt based on action
-    let systemPrompt = `You are a warm, friendly, and intelligent pantry and meal planning assistant. 
-Always organize your responses into THREE clear sections:
-1. **Pantry Update** – Confirm what was added or updated
-2. **Meal Ideas** – Suggest meals based on current inventory
-3. **Shopping List** – List missing ingredients for suggested meals
+    // System prompt for Sage
+    const systemPrompt = `You are Sage, the kitchen assistant.
+Your job is to interpret the user's speech text, determine their intent, and return a JSON action.
 
-Use warm, friendly language like "Lovely! I've added milk to your fridge." or "Here's what you can make tonight..."
+RULES:
+- If the user adds an item without a category, ask: "Fridge, freezer, or cupboard?"
+- If the user answers with just a category ("fridge", "freezer", etc.), apply it to the last item.
+- Always return JSON in this format:
+
+{
+  "action": "<add_item | update_item | ask | none>",
+  "payload": {},
+  "speak": "<what Sage says>"
+}
 
 Current pantry inventory:
 ${JSON.stringify(pantryItems, null, 2)}
+
+${lastItem ? `Last item waiting for category: ${lastItem}` : ''}
 
 Dietary restrictions: ${dietaryRestrictions?.join(", ") || "None"}
 Household size: ${householdSize || 2} people
@@ -70,110 +78,84 @@ Recipe preferences: ${recipeFilters && recipeFilters.length > 0 ? recipeFilters.
   return filterMap[f] || f;
 }).join(", ") : "No specific preferences"}
 
-IMPORTANT: When suggesting meals, STRICTLY adhere to all active recipe preferences. Only suggest recipes that match ALL selected filters.`;
+IMPORTANT: 
+- When suggesting meals, STRICTLY adhere to all active recipe preferences. Only suggest recipes that match ALL selected filters.
+- Use warm, friendly language like "Lovely! I've added milk to your fridge." or "Here's what you can make tonight..."
+- The "speak" field should contain what you say to the user. This will be converted to speech.
+- NO AUDIO OUTPUT. NO BASE64. Only text in "speak" is for TTS.`;
 
-    if (action === "process_voice") {
-      if (pendingClarification) {
-        systemPrompt += `\n\nThe user is answering a clarification question about: "${pendingClarification.item}"
-User's response: "${voiceInput}"
-
-Based on their answer, categorize the item "${pendingClarification.item}" appropriately and add it to the pantry.
-Then provide a warm confirmation and continue with meal suggestions.`;
-      } else {
-        systemPrompt += `\n\nThe user said: "${voiceInput}"
-
-Parse their voice command and:
-1. Identify items to add/update (e.g., "add milk to fridge", "low on olive oil")
-2. For items that could go in multiple categories (like salmon, meat, etc.), set needsClarification: true and suggest options
-3. Categorize clear items into: fridge, freezer, cupboard, or pantry_staples
-4. Mark items as low stock if indicated
-5. Return structured data for database updates
-6. Suggest meals using available ingredients
-7. Generate shopping list for missing ingredients`;
-      }
-    }
-
-    // Define tool for structured pantry updates
+    // Define tool for structured responses
     const tools = [
       {
         type: "function",
         function: {
-          name: "update_pantry",
-          description: "Update pantry inventory based on voice command",
+          name: "sage_response",
+          description: "Return Sage's action and speech",
           parameters: {
             type: "object",
             properties: {
-              items_to_add: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    category: {
-                      type: "string",
-                      enum: ["fridge", "freezer", "cupboard", "pantry_staples"]
-                    },
-                    quantity: { type: "string" },
-                    is_low: { type: "boolean" },
-                    needsClarification: { type: "boolean" },
-                    clarificationOptions: {
-                      type: "array",
-                      items: { type: "string" }
-                    }
-                  },
-                  required: ["name", "category"]
-                }
+              action: {
+                type: "string",
+                enum: ["add_item", "update_item", "ask", "none"],
+                description: "The action to take"
               },
-              meal_suggestions: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    ingredients_available: { type: "array", items: { type: "string" } },
-                    ingredients_needed: { type: "array", items: { type: "string" } },
-                    recipe: {
+              payload: {
+                type: "object",
+                description: "Action-specific data",
+                properties: {
+                  items: {
+                    type: "array",
+                    items: {
                       type: "object",
                       properties: {
-                        ingredients_with_quantities: { 
-                          type: "array", 
-                          items: { type: "string" },
-                          description: "List of ingredients with specific quantities, e.g. '2 cups milk', '1 tablespoon olive oil'"
-                        },
-                        cooking_steps: { 
-                          type: "array", 
-                          items: { type: "string" },
-                          description: "Step-by-step cooking instructions"
-                        },
-                        tips: { 
+                        name: { type: "string" },
+                        category: {
                           type: "string",
-                          description: "Helpful cooking tips or notes"
-                        }
-                      },
-                      required: ["ingredients_with_quantities", "cooking_steps"]
+                          enum: ["fridge", "freezer", "cupboard", "pantry_staples"]
+                        },
+                        quantity: { type: "string" },
+                        is_low: { type: "boolean" }
+                      }
                     }
                   },
-                  required: ["name", "recipe"]
+                  meal_suggestions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        ingredients_available: { type: "array", items: { type: "string" } },
+                        ingredients_needed: { type: "array", items: { type: "string" } },
+                        recipe: {
+                          type: "object",
+                          properties: {
+                            ingredients_with_quantities: { 
+                              type: "array", 
+                              items: { type: "string" }
+                            },
+                            cooking_steps: { 
+                              type: "array", 
+                              items: { type: "string" }
+                            },
+                            tips: { type: "string" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  shopping_list: {
+                    type: "array",
+                    items: { type: "string" }
+                  },
+                  pending_item: { type: "string" }
                 }
               },
-              shopping_list: {
-                type: "array",
-                items: { type: "string" }
-              },
-              confirmation_message: {
+              speak: {
                 type: "string",
-                description: "Friendly confirmation message"
-              },
-              needsClarification: {
-                type: "boolean",
-                description: "True if any items need category clarification"
-              },
-              clarificationMessage: {
-                type: "string",
-                description: "Question to ask user for clarification"
+                description: "What Sage says to the user (will be converted to speech)"
               }
             },
-            required: ["confirmation_message"],
+            required: ["action", "speak"],
             additionalProperties: false
           }
         }
@@ -193,7 +175,7 @@ Parse their voice command and:
           { role: "user", content: voiceInput || "Analyze my pantry and suggest meals" }
         ],
         tools: tools,
-        tool_choice: { type: "function", function: { name: "update_pantry" } }
+        tool_choice: { type: "function", function: { name: "sage_response" } }
       }),
     });
 
@@ -218,40 +200,22 @@ Parse their voice command and:
     const aiResponse = await response.json();
     console.log("AI response:", JSON.stringify(aiResponse, null, 2));
 
-    // Extract tool call results
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     
     if (!toolCall) {
       throw new Error("No tool call in AI response");
     }
 
-    const parsedData = JSON.parse(toolCall.function.arguments);
-    console.log("Parsed data:", parsedData);
+    const sageResponse = JSON.parse(toolCall.function.arguments);
+    console.log("Sage response:", sageResponse);
 
-    // Check if clarification is needed
-    const itemsNeedingClarification = parsedData.items_to_add?.filter((item: any) => item.needsClarification);
-    
-    if (itemsNeedingClarification && itemsNeedingClarification.length > 0) {
-      console.log("Items need clarification:", itemsNeedingClarification);
-      return new Response(
-        JSON.stringify({
-          ...parsedData,
-          needsClarification: true,
-          pendingItem: itemsNeedingClarification[0],
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Update database if items to add
-    if (parsedData.items_to_add && parsedData.items_to_add.length > 0) {
+    // Handle database updates for add_item action
+    if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 
       if (userId) {
-        for (const item of parsedData.items_to_add) {
+        for (const item of sageResponse.payload.items) {
           const { error: insertError } = await supabase
             .from("pantry_items")
             .insert({
@@ -270,7 +234,7 @@ Parse their voice command and:
     }
 
     return new Response(
-      JSON.stringify(parsedData),
+      JSON.stringify(sageResponse),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
