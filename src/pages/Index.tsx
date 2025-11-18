@@ -127,49 +127,46 @@ const Index = () => {
         .map((f) => f.id);
 
       // Check if we're answering a clarification question
-      const requestBody: any = {
-        voiceInput: transcript,
-        action: "process_voice",
-        dietaryRestrictions: settings?.dietary_restrictions || [],
-        householdSize: settings?.household_size || 2,
-        recipeFilters: activeFilters,
-      };
-
-      if (pendingClarification) {
-        requestBody.pendingClarification = pendingClarification;
-      }
-
       const { data, error } = await supabase.functions.invoke(
         "pantry-assistant",
-        { body: requestBody }
+        {
+          body: {
+            voiceInput: transcript,
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+            lastItem: lastItem
+          },
+        }
       );
 
       if (error) throw error;
 
-      console.log("Assistant response:", data);
+      console.log("Sage response:", data);
+
+      // Handle "ask" action (clarification needed)
+      if (data.action === "ask" && data.payload?.pending_item) {
+        setLastItem(data.payload.pending_item);
+        speak(data.speak);
+        toast.info(data.speak);
+        setProcessing(false);
+        return;
+      }
+
+      // Clear last item if resolved
+      setLastItem(null);
+
+      setSageResponse(data);
       
-      // Handle clarification needed
-      if (data.needsClarification) {
-        setPendingClarification(data.pendingItem);
-        setAssistantResponse(data);
-        
-        // Speak the clarification message
-        if (data.clarificationMessage) {
-          speak(data.clarificationMessage);
-        }
-        
-        toast.info("Please clarify your response");
-      } else {
-        // Clear any pending clarification
-        setPendingClarification(null);
-        setAssistantResponse(data);
-        
-        // Speak the confirmation message
-        if (data.confirmation_message) {
-          speak(data.confirmation_message);
-        }
-        
-        toast.success("Voice command processed!");
+      // Speak Sage's response
+      if (data.speak) {
+        speak(data.speak);
+      }
+
+      await fetchPantryItems();
+      
+      if (data.action === "add_item") {
+        toast.success("Pantry updated!");
       }
     } catch (error: any) {
       console.error("Error processing voice input:", error);
@@ -242,20 +239,20 @@ const Index = () => {
             <div className="text-center space-y-4">
               <h2 className="text-2xl font-semibold">Add Items with Your Voice</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                {pendingClarification 
+                {lastItem 
                   ? "Please answer the question" 
-                  : 'Try saying: "Add milk to the fridge" or "I\'m running low on olive oil"'}
+                  : "Simply tell me what you have, and I'll organize your pantry for you"}
               </p>
-              {pendingClarification && assistantResponse?.clarificationMessage && (
-                <div className="p-4 bg-accent/50 rounded-lg max-w-md mx-auto">
-                  <p className="text-sm font-medium">
-                    {assistantResponse.clarificationMessage}
-                  </p>
-                </div>
+              {lastItem && (
+                <Badge variant="outline" className="text-sm">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Waiting for: {lastItem}
+                </Badge>
               )}
-              <div className="flex justify-center pt-4">
-                <VoiceInput onTranscript={handleVoiceInput} disabled={processing || isSpeaking} />
-              </div>
+              <VoiceInput 
+                onTranscript={handleVoiceInput} 
+                disabled={processing || isSpeaking}
+              />
               {(processing || isSpeaking) && (
                 <p className="text-sm text-primary animate-pulse">
                   {isSpeaking ? "Speaking..." : "Processing your request..."}
@@ -308,8 +305,8 @@ const Index = () => {
               </CardContent>
             </Card>
             
-            {assistantResponse?.meal_suggestions && assistantResponse.meal_suggestions.length > 0 ? (
-              <MealSuggestions meals={assistantResponse.meal_suggestions} />
+            {sageResponse?.payload?.meal_suggestions && sageResponse.payload.meal_suggestions.length > 0 ? (
+              <MealSuggestions meals={sageResponse.payload.meal_suggestions} />
             ) : (
               <Card>
                 <CardContent className="pt-6 text-center text-muted-foreground">
@@ -325,8 +322,8 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="shopping">
-            {assistantResponse?.shopping_list && assistantResponse.shopping_list.length > 0 ? (
-              <ShoppingList items={assistantResponse.shopping_list} />
+            {sageResponse?.payload?.shopping_list && sageResponse.payload.shopping_list.length > 0 ? (
+              <ShoppingList items={sageResponse.payload.shopping_list} />
             ) : (
               <Card>
                 <CardContent className="pt-6 text-center text-muted-foreground">
