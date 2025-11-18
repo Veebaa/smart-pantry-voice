@@ -1,12 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-// Some environments/typecheckers may not include Deno types; keep a simple declaration
-declare const Deno: any;
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+// Map common voice names to OpenAI voices
+const VOICE_MAP: Record<string, string> = {
+  // Default mappings
+  "9BWtsMINqrJLrRacOk9x": "alloy", // Aria -> alloy
+  "EXAVITQu4vr4xnSDxMaL": "nova",   // Sarah -> nova
+  "cgSgspJ2msm6clMCkdW9": "shimmer", // Jessica -> shimmer
+  "pFZP5JQG7iQjIQuC4Bku": "coral",   // Lily -> coral
+  "XB0fDUnXU5powFXDhCwa": "echo",    // Charlotte -> echo
+  "XrExE9yKIg1WjnnlVkGX": "fable",   // Matilda -> fable
 };
 
 // Utility: Convert ArrayBuffer to Base64 safely in chunks
