@@ -151,7 +151,11 @@ export const SettingsDialog = () => {
               min={1}
               max={20}
               value={householdSize}
-              onChange={(e) => setHouseholdSize(parseInt(e.target.value) || 2)}
+              onChange={(e) => {
+                let value = parseInt(e.target.value) || 1;
+                value = Math.min(Math.max(value, 1), 20); // enforce 1-20 strictly
+                setHouseholdSize(value);
+              }}
             />
             <p className="text-sm text-muted-foreground">
               Number of people you're cooking for

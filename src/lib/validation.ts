@@ -5,6 +5,9 @@ import { z } from 'zod';
  * and ensure data integrity across the application.
  */
 
+// List of known breached passwords for temporary protection
+const breachedPasswords = ["123456", "password", "qwerty", "letmein"];
+
 // Auth validation schemas
 export const authSchema = z.object({
   email: z
@@ -14,7 +17,6 @@ export const authSchema = z.object({
     .email({ message: "Invalid email address" })
     .max(255, { message: "Email must be less than 255 characters" })
     .refine((email) => {
-      // Additional email validation: prevent common injection patterns
       const dangerousPatterns = /<|>|javascript:|onerror=|onclick=/i;
       return !dangerousPatterns.test(email);
     }, { message: "Invalid email format" }),
@@ -23,9 +25,11 @@ export const authSchema = z.object({
     .min(8, { message: "Password must be at least 8 characters" })
     .max(128, { message: "Password must be less than 128 characters" })
     .refine((password) => {
-      // Password strength: require at least one uppercase, one lowercase, one number
       return /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password);
     }, { message: "Password must contain uppercase, lowercase, and number" })
+    .refine((pwd) => !breachedPasswords.includes(pwd), {
+      message: "This password has been compromised in a known data breach",
+    }),
 });
 
 // Settings validation schemas
@@ -39,7 +43,6 @@ export const settingsSchema = z.object({
     .array(z.string())
     .max(10, { message: "Too many dietary restrictions selected" })
     .refine((items) => {
-      // Validate each item is from allowed list
       const allowed = ["vegetarian", "vegan", "gluten-free", "dairy-free", "nut-free", "low-carb", "keto"];
       return items.every(item => allowed.includes(item));
     }, { message: "Invalid dietary restriction" }),
@@ -60,7 +63,6 @@ export const voiceInputSchema = z
   .min(1, { message: "Voice input cannot be empty" })
   .max(500, { message: "Voice input must be less than 500 characters" })
   .refine((text) => {
-    // Prevent script injection attempts in voice input
     const dangerousPatterns = /<script|javascript:|onerror=|onclick=|<iframe/i;
     return !dangerousPatterns.test(text);
   }, { message: "Invalid input detected" });
@@ -73,7 +75,6 @@ export const pantryItemSchema = z.object({
     .min(1, { message: "Item name is required" })
     .max(100, { message: "Item name must be less than 100 characters" })
     .refine((name) => {
-      // Prevent XSS in item names
       const xssPatterns = /<|>|&lt;|&gt;|javascript:|onerror=/i;
       return !xssPatterns.test(name);
     }, { message: "Invalid characters in item name" }),
@@ -103,10 +104,8 @@ export const pantryItemSchema = z.object({
 
 /**
  * Sanitize HTML content to prevent XSS attacks
- * Use this when displaying user-generated or AI-generated content
  */
 export const sanitizeHtml = (html: string): string => {
-  // Basic HTML entity encoding
   return html
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -118,13 +117,12 @@ export const sanitizeHtml = (html: string): string => {
 
 /**
  * Validate and sanitize text content
- * Use this for displaying text that might contain user input
  */
 export const sanitizeText = (text: string): string => {
   return text
     .trim()
-    .slice(0, 1000) // Limit length
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/on\w+\s*=/gi, ''); // Remove event handlers
+    .slice(0, 1000)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '');
 };
