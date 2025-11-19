@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ChefHat, Check, ShoppingCart, CookingPot, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { sanitizeText } from "@/lib/validation";
 
 interface MealSuggestion {
   name: string;
