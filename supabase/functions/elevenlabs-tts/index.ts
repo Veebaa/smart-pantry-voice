@@ -54,9 +54,9 @@ serve(async (req: Request) => {
       });
     }
 
-    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-    if (!ELEVENLABS_API_KEY) {
-      return new Response(JSON.stringify({ error: "ELEVENLABS_API_KEY not configured" }), {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -64,33 +64,31 @@ serve(async (req: Request) => {
 
     console.log("Generating speech:", { text, voiceId, language });
 
-    // Use default voice if not provided
-    const finalVoiceId = voiceId || "9BWtsMINqrJLrRacOk9x"; // Default: Aria
+    // Map ElevenLabs voice ID to OpenAI voice, or use default
+    const mappedVoice = voiceId ? (VOICE_MAP[voiceId] || "alloy") : "alloy";
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${finalVoiceId}`,
+      "https://api.openai.com/v1/audio/speech",
       {
         method: "POST",
         headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-          },
+          model: "tts-1",
+          input: text,
+          voice: mappedVoice,
+          response_format: "mp3",
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      console.error("ElevenLabs API error:", response.status, errorText);
+      console.error("OpenAI TTS API error:", response.status, errorText);
       return new Response(
-        JSON.stringify({ error: `ElevenLabs API error: ${response.status}`, details: errorText }),
+        JSON.stringify({ error: `OpenAI TTS API error: ${response.status}`, details: errorText }),
         { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -106,7 +104,7 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Error in elevenlabs-tts:", message);
+    console.error("Error in openai-tts:", message);
     return new Response(
       JSON.stringify({ error: message }),
       {
