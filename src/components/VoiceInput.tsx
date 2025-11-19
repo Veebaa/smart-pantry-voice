@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff } from "lucide-react";
 import { toast } from "sonner";
+import { voiceInputSchema } from "@/lib/validation";
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
@@ -29,12 +30,23 @@ export const VoiceInput = ({ onTranscript, disabled }: VoiceInputProps) => {
 
     recognitionInstance.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      onTranscript(transcript);
+      
+      // Security: Validate and sanitize voice input
+      try {
+        const validatedTranscript = voiceInputSchema.parse(transcript);
+        onTranscript(validatedTranscript);
+      } catch (error) {
+        toast.error("Invalid voice input detected. Please try again.");
+        console.warn("Voice input validation failed:", transcript);
+      }
       setIsListening(false);
     };
 
     recognitionInstance.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      // Security: Don't log sensitive error details to console in production
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Speech recognition error:', event.error);
+      }
       toast.error(`Voice input error: ${event.error}`);
       setIsListening(false);
     };
@@ -67,7 +79,10 @@ export const VoiceInput = ({ onTranscript, disabled }: VoiceInputProps) => {
         setIsListening(true);
         toast.info("Listening... Speak now!");
       } catch (error) {
-        console.error("Error starting recognition:", error);
+        // Security: Don't log error details in production
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Error starting recognition:", error);
+        }
         toast.error("Failed to start voice recognition");
       }
     }

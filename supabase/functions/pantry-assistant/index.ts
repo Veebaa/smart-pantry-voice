@@ -14,7 +14,8 @@ serve(async (req) => {
   try {
     const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem } = await req.json();
     
-    console.log("Received request:", { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem });
+    // Security: Basic logging without sensitive details
+    console.log("Processing pantry request");
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -36,11 +37,12 @@ serve(async (req) => {
       .select("*");
 
     if (pantryError) {
-      console.error("Error fetching pantry:", pantryError);
+      console.error("Error fetching pantry:", pantryError.message);
       throw new Error("Failed to fetch pantry items");
     }
 
-    console.log("Fetched pantry items:", pantryItems);
+    // Security: Don't log full pantry contents in production
+    console.log(`Fetched ${pantryItems?.length || 0} pantry items`);
 
     // System prompt for Sage
     const systemPrompt = `You are Sage, the kitchen assistant.
@@ -198,7 +200,8 @@ IMPORTANT:
     }
 
     const aiResponse = await response.json();
-    console.log("AI response:", JSON.stringify(aiResponse, null, 2));
+    // Security: Log AI response status without full content
+    console.log("AI response received successfully");
 
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     
@@ -207,7 +210,7 @@ IMPORTANT:
     }
 
     const sageResponse = JSON.parse(toolCall.function.arguments);
-    console.log("Sage response:", sageResponse);
+    console.log("Sage action:", sageResponse.action);
 
     // Handle database updates for add_item action
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
@@ -216,6 +219,12 @@ IMPORTANT:
 
       if (userId) {
         for (const item of sageResponse.payload.items) {
+          // Security: Validate item data before insertion
+          if (!item.name || !item.category) {
+            console.warn("Invalid item data, skipping:", item.name);
+            continue;
+          }
+          
           const { error: insertError } = await supabase
             .from("pantry_items")
             .insert({
@@ -227,7 +236,7 @@ IMPORTANT:
             });
 
           if (insertError) {
-            console.error("Error inserting item:", insertError);
+            console.error("Error inserting item:", insertError.message);
           }
         }
       }

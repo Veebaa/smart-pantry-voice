@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { settingsSchema } from "@/lib/validation";
+import { z } from "zod";
 
 const dietaryOptions = [
   "vegetarian",
@@ -86,14 +88,22 @@ export const SettingsDialog = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Security: Validate all settings input before saving
+      const validatedData = settingsSchema.parse({
+        householdSize,
+        dietaryRestrictions: selectedDiets,
+        voiceLanguage,
+        voiceAccent
+      });
+
       const { error } = await supabase
         .from("user_settings")
         .upsert({
           user_id: user.id,
-          household_size: householdSize,
-          dietary_restrictions: selectedDiets,
-          voice_language: voiceLanguage,
-          voice_accent: voiceAccent,
+          household_size: validatedData.householdSize,
+          dietary_restrictions: validatedData.dietaryRestrictions,
+          voice_language: validatedData.voiceLanguage,
+          voice_accent: validatedData.voiceAccent,
         });
 
       if (error) throw error;
@@ -101,7 +111,13 @@ export const SettingsDialog = () => {
       toast.success("Settings saved successfully!");
       setOpen(false);
     } catch (error: any) {
-      toast.error(error.message);
+      // Security: Handle validation errors gracefully
+      if (error instanceof z.ZodError) {
+        const messages = error.issues.map(issue => issue.message).join(", ");
+        toast.error(`Invalid input: ${messages}`);
+      } else {
+        toast.error(error.message);
+      }
     } finally {
       setLoading(false);
     }

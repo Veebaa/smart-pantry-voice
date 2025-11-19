@@ -4,29 +4,74 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { authSchema } from "@/lib/validation";
+import { z } from "zod";
 
 export const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrors({});
 
     try {
+      // Security: Validate input before sending to Supabase
+      const validatedData = authSchema.parse({ email, password });
+      
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { error } = await supabase.auth.signInWithPassword({ 
+          email: validatedData.email, 
+          password: validatedData.password 
+        });
+        if (error) {
+          // Security: Don't expose whether user exists or not
+          if (error.message.includes("Invalid") || error.message.includes("not found")) {
+            throw new Error("Invalid email or password");
+          }
+          throw error;
+        }
         toast.success("Welcome back!");
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+        // Security: REQUIRED - Set emailRedirectTo for proper auth flow
+        const redirectUrl = `${window.location.origin}/`;
+        
+        const { error } = await supabase.auth.signUp({ 
+          email: validatedData.email, 
+          password: validatedData.password,
+          options: {
+            emailRedirectTo: redirectUrl
+          }
+        });
+        if (error) {
+          // Security: Handle common signup errors gracefully
+          if (error.message.includes("already registered")) {
+            throw new Error("This email is already registered. Please sign in instead.");
+          }
+          throw error;
+        }
         toast.success("Account created! Welcome to your pantry assistant.");
       }
     } catch (error: any) {
-      toast.error(error.message);
+      // Security: Handle validation errors separately
+      if (error instanceof z.ZodError) {
+        const fieldErrors: { email?: string; password?: string } = {};
+        error.issues.forEach((err) => {
+          if (err.path[0] === "email") {
+            fieldErrors.email = err.message;
+          } else if (err.path[0] === "password") {
+            fieldErrors.password = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+        toast.error("Please check your input and try again");
+      } else {
+        toast.error(error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -52,19 +97,29 @@ export const Auth = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12"
+                className={`h-12 ${errors.email ? 'border-red-500' : ''}`}
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
               />
+              {errors.email && (
+                <p id="email-error" className="text-sm text-red-500">{errors.email}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Input
                 type="password"
-                placeholder="Password"
+                placeholder="Password (min 8 chars, uppercase, lowercase, number)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-12"
-                minLength={6}
+                className={`h-12 ${errors.password ? 'border-red-500' : ''}`}
+                minLength={8}
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? "password-error" : undefined}
               />
+              {errors.password && (
+                <p id="password-error" className="text-sm text-red-500">{errors.password}</p>
+              )}
             </div>
             <Button
               type="submit"
