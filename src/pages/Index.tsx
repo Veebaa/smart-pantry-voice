@@ -44,6 +44,7 @@ const Index = () => {
   const [sageResponse, setSageResponse] = useState<SageResponse | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastItem, setLastItem] = useState<string | null>(null);
+  const [pendingTimeout, setPendingTimeout] = useState<NodeJS.Timeout | null>(null);
   const { speak, isSpeaking } = useVoiceOutput();
   const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
     { id: "vegetarian", label: "Vegetarian", active: false },
@@ -96,6 +97,29 @@ const Index = () => {
       };
     }
   }, [user]);
+
+  // Timeout mechanism for pending category questions
+  useEffect(() => {
+    if (lastItem) {
+      // Set 60-second timeout to auto-cancel pending question
+      const timeout = setTimeout(() => {
+        setLastItem(null);
+        toast.info("Category question timed out");
+      }, 60000);
+      
+      setPendingTimeout(timeout);
+      
+      return () => {
+        if (timeout) clearTimeout(timeout);
+      };
+    } else {
+      // Clear timeout if lastItem is cleared
+      if (pendingTimeout) {
+        clearTimeout(pendingTimeout);
+        setPendingTimeout(null);
+      }
+    }
+  }, [lastItem]);
 
   const fetchPantryItems = async () => {
     try {
@@ -193,6 +217,11 @@ const Index = () => {
     setPantryItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleCancelPending = () => {
+    setLastItem(null);
+    toast.info("Category question cancelled");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -233,6 +262,35 @@ const Index = () => {
           </div>
         </div>
 
+        {/* Pending category question indicator */}
+        {lastItem && (
+          <Card className="mb-6 border-orange-500 bg-orange-50 dark:bg-orange-950">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-orange-600" />
+                  <div>
+                    <p className="font-medium text-orange-900 dark:text-orange-100">
+                      Waiting for category: <span className="font-bold">{lastItem}</span>
+                    </p>
+                    <p className="text-sm text-orange-700 dark:text-orange-300">
+                      Say "fridge", "freezer", "cupboard" - or say "skip" to cancel (auto-cancel in 60s)
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleCancelPending}
+                  className="border-orange-600 text-orange-600 hover:bg-orange-100"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Voice Input Section */}
         <Card className="mb-8 overflow-hidden shadow-lg">
           <div className="bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 p-8">
@@ -243,12 +301,6 @@ const Index = () => {
                   ? "Please answer the question" 
                   : "Simply tell me what you have, and I'll organize your pantry for you"}
               </p>
-              {lastItem && (
-                <Badge variant="outline" className="text-sm">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  Waiting for: {lastItem}
-                </Badge>
-              )}
               <VoiceInput 
                 onTranscript={handleVoiceInput} 
                 disabled={processing || isSpeaking}
