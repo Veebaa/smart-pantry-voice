@@ -2,25 +2,28 @@ import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-// Voice ID mapping for different accents
-const VOICE_MAP: Record<string, string> = {
-  "en-US": "9BWtsMINqrJLrRacOk9x", // Aria - American English
-  "en-GB": "EXAVITQu4vr4xnSDxMaL", // Sarah - British English
-  "en-IE": "cgSgspJ2msm6clMCkdW9", // Jessica - Irish English
-  "en-AU": "pFZP5JQG7iQjIQuC4Bku", // Lily - Australian English
-  "es": "XB0fDUnXU5powFXDhCwa", // Charlotte - Spanish
-  "fr": "XrExE9yKIg1WjnnlVkGX", // Matilda - French
-  "de": "iP95p4xoKVk53GoZ742B", // Chris - German
-  "it": "onwK4e9ZLuTAKqWW03F9", // Daniel - Italian
-  "pt": "pqHfZKP75CvOlQylNhV4", // Bill - Portuguese
+// Accent → OpenAI voice mapping
+const OPENAI_VOICE_MAP: Record<string, string> = {
+  "en-US": "alloy",    // Default American
+  "en-GB": "verse",    // British
+  "en-IE": "alloy",    // No Irish voice—fallback to neutral
+  "en-AU": "verse",    // Best AU approximation
+  "es": "alloy",       // Spanish (ES/LATAM handled by model)
+  "fr": "alloy",
+  "de": "alloy",
+  "it": "alloy",
+  "pt": "alloy",
 };
 
 export const useVoiceOutput = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioQueueRef = useRef<string[]>([]);
-  const isPlayingRef = useRef(false);
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const isPlayingRef = useRef(false);
+  const onEndCallbackRef = useRef<(() => void) | null>(null);
+
+  /** Fetch user TTS language/accent settings */
   const getVoiceSettings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -36,85 +39,101 @@ export const useVoiceOutput = () => {
         language: settings?.voice_language || "en",
         accent: settings?.voice_accent || "en-US",
       };
-    } catch (error) {
-      console.error("Error fetching voice settings:", error);
+    } catch (err) {
+      console.error("Error loading voice settings:", err);
       return { language: "en", accent: "en-US" };
     }
   };
 
-  const playNextInQueue = useCallback(async () => {
-    if (isPlayingRef.current || audioQueueRef.current.length === 0) {
-      return;
-    }
+  /** Convert ArrayBuffer → playable blob URL */
+  const createAudioUrl = (buffer: ArrayBuffer) => {
+    const blob = new Blob([buffer], { type: "audio/mpeg" });
+    return URL.createObjectURL(blob);
+  };
 
+  /** Plays next item in queue */
+  const playNext = useCallback(async () => {
+    if (isPlayingRef.current || queueRef.current.length === 0) return;
+
+    const text = queueRef.current.shift()!;
     isPlayingRef.current = true;
-    const text = audioQueueRef.current.shift()!;
 
     try {
-      const { language, accent } = await getVoiceSettings();
-      const voiceId = VOICE_MAP[accent] || VOICE_MAP["en-US"];
+      const { accent, language } = await getVoiceSettings();
+      const voice = OPENAI_VOICE_MAP[accent] || OPENAI_VOICE_MAP["en-US"];
 
-      const { data, error } = await supabase.functions.invoke("elevenlabs-tts", {
-        body: { text, voiceId, language },
+      const res = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini-tts",
+          input: text,
+          voice,
+          format: "mp3",
+          language,
+        }),
       });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error(`OpenAI TTS failed: ${res.status}`);
 
-      if (data?.audioContent) {
-        const audioBlob = new Blob(
-          [Uint8Array.from(atob(data.audioContent), (c) => c.charCodeAt(0))],
-          { type: "audio/mpeg" }
-        );
-        const audioUrl = URL.createObjectURL(audioBlob);
+      // Convert binary stream → ArrayBuffer
+      const audioBuffer = await res.arrayBuffer();
+      const audioUrl = createAudioUrl(audioBuffer);
 
-        if (audioRef.current) {
-          audioRef.current.pause();
-          URL.revokeObjectURL(audioRef.current.src);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+
+      audioRef.current = new Audio(audioUrl);
+      setIsSpeaking(true);
+
+      audioRef.current.onended = () => {
+        setIsSpeaking(false);
+        isPlayingRef.current = false;
+
+        URL.revokeObjectURL(audioUrl);
+
+        if (onEndCallbackRef.current) {
+          onEndCallbackRef.current();
+          onEndCallbackRef.current = null;
         }
 
-        audioRef.current = new Audio(audioUrl);
-        setIsSpeaking(true);
+        playNext();
+      };
 
-        audioRef.current.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          setIsSpeaking(false);
-          isPlayingRef.current = false;
-          playNextInQueue();
-        };
-
-        audioRef.current.onerror = () => {
-          console.error("Audio playback error");
-          setIsSpeaking(false);
-          isPlayingRef.current = false;
-          playNextInQueue();
-        };
-
-        await audioRef.current.play();
-      }
-    } catch (error: any) {
-      console.error("Error in voice output:", error);
+      await audioRef.current.play();
+    } catch (err) {
+      console.error("Voice output error:", err);
       toast.error("Voice output failed");
-      setIsSpeaking(false);
       isPlayingRef.current = false;
-      playNextInQueue();
+      setIsSpeaking(false);
+      playNext();
     }
   }, []);
 
+  /** Public speak() method */
   const speak = useCallback(
-    (text: string) => {
-      audioQueueRef.current.push(text);
-      playNextInQueue();
+    (text: string, opts?: { onend?: () => void }) => {
+      if (opts?.onend) onEndCallbackRef.current = opts.onend;
+
+      queueRef.current.push(text);
+      playNext();
     },
-    [playNextInQueue]
+    [playNext]
   );
 
+  /** Stop all playback */
   const stop = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       URL.revokeObjectURL(audioRef.current.src);
       audioRef.current = null;
     }
-    audioQueueRef.current = [];
+    queueRef.current = [];
     isPlayingRef.current = false;
     setIsSpeaking(false);
   }, []);

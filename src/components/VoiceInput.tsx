@@ -89,7 +89,8 @@ export const VoiceInput = ({ onTranscript, disabled }: VoiceInputProps) => {
   };
 
   return (
-    <Button
+    <Button 
+      id="voice-input-button"
       onClick={toggleListening}
       disabled={disabled || !recognition}
       size="lg"

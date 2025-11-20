@@ -46,6 +46,7 @@ const Index = () => {
   const [lastItem, setLastItem] = useState<string | null>(null);
   const [pendingTimeout, setPendingTimeout] = useState<NodeJS.Timeout | null>(null);
   const { speak, isSpeaking } = useVoiceOutput();
+  const [openMicAfterSpeak, setOpenMicAfterSpeak] = useState(false); // After: const { speak, isSpeaking } = useVoiceOutput();
   const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
     { id: "vegetarian", label: "Vegetarian", active: false },
     { id: "vegan", label: "Vegan", active: false },
@@ -121,6 +122,16 @@ const Index = () => {
     }
   }, [lastItem]);
 
+  useEffect(() => {
+    if (!isSpeaking && openMicAfterSpeak) {
+      const voiceInputEl = document.getElementById("voice-input-button");
+      if (voiceInputEl) voiceInputEl.click();
+
+      setOpenMicAfterSpeak(false); // reset
+    }
+  }, [isSpeaking, openMicAfterSpeak]);
+
+
   const fetchPantryItems = async () => {
     try {
       const { data, error } = await supabase
@@ -170,8 +181,15 @@ const Index = () => {
 
       // Handle "ask" action (clarification needed)
       if (data.action === "ask" && data.payload?.pending_item) {
+        // Store pending item so we can attach the user's next answer to it
         setLastItem(data.payload.pending_item);
+
+        // Mark that we want to open the mic after speaking finishes
+        setOpenMicAfterSpeak(true);
+
+        // Speak the question (speak only accepts the text argument)
         speak(data.speak);
+
         toast.info(data.speak);
         setProcessing(false);
         return;
