@@ -6,9 +6,9 @@ import { toast } from "sonner";
 const OPENAI_VOICE_MAP: Record<string, string> = {
   "en-US": "alloy",    // Default American
   "en-GB": "verse",    // British
-  "en-IE": "alloy",    // No Irish voice—fallback to neutral
-  "en-AU": "verse",    // Best AU approximation
-  "es": "alloy",       // Spanish (ES/LATAM handled by model)
+  "en-IE": "alloy",    // No Irish voice—fallback
+  "en-AU": "verse",    // Australian approximation
+  "es": "alloy",       // Spanish fallback
   "fr": "alloy",
   "de": "alloy",
   "it": "alloy",
@@ -79,7 +79,6 @@ export const useVoiceOutput = () => {
 
       if (!res.ok) throw new Error(`OpenAI TTS failed: ${res.status}`);
 
-      // Convert binary stream → ArrayBuffer
       const audioBuffer = await res.arrayBuffer();
       const audioUrl = createAudioUrl(audioBuffer);
 
@@ -94,7 +93,6 @@ export const useVoiceOutput = () => {
       audioRef.current.onended = () => {
         setIsSpeaking(false);
         isPlayingRef.current = false;
-
         URL.revokeObjectURL(audioUrl);
 
         if (onEndCallbackRef.current) {
@@ -119,7 +117,6 @@ export const useVoiceOutput = () => {
   const speak = useCallback(
     (text: string, opts?: { onend?: () => void }) => {
       if (opts?.onend) onEndCallbackRef.current = opts.onend;
-
       queueRef.current.push(text);
       playNext();
     },

@@ -64,7 +64,7 @@ serve(async (req: Request) => {
 
     console.log("Generating speech:", { text, voiceId, language });
 
-    // Map ElevenLabs voice ID to OpenAI voice, or use default
+  
     const mappedVoice = voiceId ? (VOICE_MAP[voiceId] || "alloy") : "alloy";
 
     const response = await fetch(
