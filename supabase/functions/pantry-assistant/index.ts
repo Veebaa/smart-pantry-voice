@@ -49,21 +49,21 @@ serve(async (req) => {
 Your job is to interpret the user's speech text, determine their intent, and return a JSON action.
 
 RULES:
-- If the user adds an item without a category, ask: "Fridge, freezer, or cupboard?"
-- If the user answers with just a category ("fridge", "freezer", etc.), apply it to the last item.
-- If the user says "skip", "cancel", "never mind", or similar, clear the pending item and respond with action "none".
-- Always return JSON in this format:
+1. If the user adds an item without a category, set action="ask", pending_item="ItemName", and speak: "Fridge, freezer, or cupboard?"
 
-{
-  "action": "<add_item | update_item | ask | none>",
-  "payload": {},
-  "speak": "<what Sage says>"
-}
+2. If there is a lastItem waiting AND the user answers with ONLY a category word ("fridge", "freezer", "cupboard", "pantry"):
+   - Set action="add_item"
+   - In payload.items, include: {"name": "<lastItem>", "category": "<user's category>", "quantity": "unknown"}
+   - Speak: "Lovely! I've added <lastItem> to your <category>."
+
+3. If the user says "skip", "cancel", "never mind", respond with action="none" and acknowledge.
+
+4. For any other command (update quantity, suggest meals, etc.), handle normally.
 
 Current pantry inventory:
 ${JSON.stringify(pantryItems, null, 2)}
 
-${lastItem ? `Last item waiting for category: ${lastItem}` : ''}
+${lastItem ? `PENDING ITEM WAITING FOR CATEGORY: "${lastItem}"` : ''}
 
 Dietary restrictions: ${dietaryRestrictions?.join(", ") || "None"}
 Household size: ${householdSize || 2} people
