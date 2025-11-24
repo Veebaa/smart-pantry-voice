@@ -87,7 +87,11 @@ const Index = () => {
 
   useEffect(() => {
     if (user) {
-      fetchPantryItems();
+      (async () => {
+        console.log("Fetching pantry items...");
+        const items = await fetchPantryItems();
+        console.log("Current pantry:", items);
+      })();
       
       // Subscribe to realtime changes
       const channel = supabase
@@ -100,8 +104,10 @@ const Index = () => {
             table: "pantry_items",
             filter: `user_id=eq.${user.id}`,
           },
-          () => {
-            fetchPantryItems();
+          async () => {
+            console.log("Fetching pantry items (realtime update)...");
+            const items = await fetchPantryItems();
+            console.log("Current pantry (realtime):", items);
           }
         )
         .subscribe();
@@ -147,6 +153,7 @@ const Index = () => {
 
   const fetchPantryItems = async () => {
     try {
+      console.log("Fetching pantry items (supabase)...");
       const { data, error } = await supabase
         .from("pantry_items")
         .select("*")
@@ -154,8 +161,10 @@ const Index = () => {
 
       if (error) throw error;
       setPantryItems(data || []);
+      return data || [];
     } catch (error: any) {
       toast.error(error.message);
+      return [];
     }
   };
 
@@ -228,7 +237,9 @@ const handleVoiceInput = async (transcript: string) => {
       // Speak and reopen mic only after speech ends
       speak(autoAddResponse.speak, {
         onend: async () => {
-          await fetchPantryItems();
+          console.log("Fetching pantry items (after auto-add)...");
+          const items = await fetchPantryItems();
+          console.log("Current pantry:", items);
           const voiceInputEl = document.getElementById("voice-input-button");
           if (voiceInputEl) voiceInputEl.click();
         },
@@ -238,7 +249,10 @@ const handleVoiceInput = async (transcript: string) => {
       return;
     }
 
-    // Prepare Edge function payload
+    // Fetch current pantry state and prepare Edge function payload
+    console.log("Preparing invocation body: fetching current pantry items to include in payload...");
+    const currentPantryItems = await fetchPantryItems(); // fetch current items from Supabase
+
     const invocationBody: Record<string, any> = lastItem
       ? {
           userAnswer: transcript,
@@ -246,12 +260,14 @@ const handleVoiceInput = async (transcript: string) => {
           dietaryRestrictions: settings?.dietary_restrictions || [],
           householdSize: settings?.household_size || 2,
           recipeFilters: activeFilters,
+          pantryItems: currentPantryItems, // include current pantry state
         }
       : {
           voiceInput: transcript,
           dietaryRestrictions: settings?.dietary_restrictions || [],
           householdSize: settings?.household_size || 2,
           recipeFilters: activeFilters,
+          pantryItems: currentPantryItems, // include current pantry state
         };
 
     console.log("Sending to Edge Function:", invocationBody);
@@ -299,13 +315,28 @@ const handleVoiceInput = async (transcript: string) => {
       toast.info(data.speak || "Action skipped");
     }
 
+    // Handle meal suggestions from Edge function
+    if (data.action === "suggest_meals") {
+      toast.success("Meal suggestions ready!");
+      setSageResponse(data);
+      if (data.speak) {
+        speak(data.speak, {
+          onend: () => fetchPantryItems(), // refresh pantry/shopping list after TTS
+        });
+      }
+      // We've handled the response; return early to avoid duplicate processing below
+      return;
+    }
+
     setSageResponse(data);
 
     // Speak and reopen mic after speech
     if (data.speak) {
       speak(data.speak, {
         onend: async () => {
-          await fetchPantryItems();
+          console.log("Fetching pantry items (after Edge response)...");
+          const items = await fetchPantryItems();
+          console.log("Current pantry:", items);
 
           // Only trigger mic if user is still ready
           const voiceInputEl = document.getElementById("voice-input-button");
@@ -316,7 +347,9 @@ const handleVoiceInput = async (transcript: string) => {
         },
       });
     } else {
-      await fetchPantryItems();
+      console.log("Fetching pantry items (after Edge response - no speak)...");
+      const items = await fetchPantryItems();
+      console.log("Current pantry:", items);
       const voiceInputEl = document.getElementById("voice-input-button");
       if (voiceInputEl && !isSpeaking) voiceInputEl.click();
     }

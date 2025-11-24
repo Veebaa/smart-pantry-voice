@@ -207,6 +207,60 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
     const sageResponse = JSON.parse(toolCall.function.arguments);
     console.log("Sage action:", sageResponse.action, "Pending item in response:", sageResponse.payload?.pending_item);
 
+    // If the AI returned meal suggestions, analyze them against the current pantry
+    // and produce shoppingListUpdates for missing or low-stock items.
+    try {
+      if (sageResponse.payload?.meal_suggestions && Array.isArray(sageResponse.payload.meal_suggestions)) {
+        // Helper: normalize ingredient/pantry names for matching
+        const normalize = (s: any) =>
+          (s || "").toString().toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+
+        const pantryMap = new Map<string, any>();
+        for (const p of pantryItems || []) {
+          pantryMap.set(normalize(p.name), p);
+        }
+
+        const missing = new Set<string>();
+        const low = new Set<string>();
+
+        for (const meal of sageResponse.payload.meal_suggestions) {
+          // meal could be a string or an object with an `ingredients` array
+          const ingredients: any[] = Array.isArray(meal?.ingredients)
+            ? meal.ingredients
+            : typeof meal === "object" && typeof meal.description === "string"
+            ? // try to extract comma-separated tokens from a description
+              meal.description.split(/[,;]\s*/)
+            : [];
+
+          for (const ing of ingredients) {
+            const ingName = normalize(typeof ing === "string" ? ing : ing?.name || ing?.ingredient || "");
+            if (!ingName) continue;
+
+            const matched = pantryMap.get(ingName);
+            if (!matched) {
+              missing.add(typeof ing === "string" ? ing : ing?.name || JSON.stringify(ing));
+            } else {
+              const isLow = !!matched.is_low || (
+                matched.current_quantity != null && matched.low_stock_threshold != null &&
+                Number(matched.current_quantity) <= Number(matched.low_stock_threshold)
+              );
+              if (isLow) low.add(matched.name);
+            }
+          }
+        }
+
+        // Attach a shoppingListUpdates object to the payload so the client can act on it
+        sageResponse.payload.shoppingListUpdates = {
+          missing: Array.from(missing),
+          low: Array.from(low),
+        };
+
+        console.log("Computed shoppingListUpdates", sageResponse.payload.shoppingListUpdates);
+      }
+    } catch (err) {
+      console.error("Error computing shoppingListUpdates:", err);
+    }
+
     // Handle add_item in DB
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
       const { data: userData } = await supabase.auth.getUser();
