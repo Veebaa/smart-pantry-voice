@@ -2,13 +2,13 @@ import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-// Accent → OpenAI voice mapping
+// Accent → OpenAI voice mapping (used for voiceId parameter)
 const OPENAI_VOICE_MAP: Record<string, string> = {
-  "en-US": "alloy",    // Default American
-  "en-GB": "verse",    // British
-  "en-IE": "alloy",    // No Irish voice—fallback
-  "en-AU": "verse",    // Australian approximation
-  "es": "alloy",       // Spanish fallback
+  "en-US": "alloy",
+  "en-GB": "verse",
+  "en-IE": "alloy",
+  "en-AU": "verse",
+  "es": "alloy",
   "fr": "alloy",
   "de": "alloy",
   "it": "alloy",
@@ -45,9 +45,14 @@ export const useVoiceOutput = () => {
     }
   };
 
-  /** Convert ArrayBuffer → playable blob URL */
-  const createAudioUrl = (buffer: ArrayBuffer) => {
-    const blob = new Blob([buffer], { type: "audio/mpeg" });
+  /** Convert base64 → playable blob URL */
+  const createAudioUrl = (base64Audio: string) => {
+    const binaryString = atob(base64Audio);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: "audio/mpeg" });
     return URL.createObjectURL(blob);
   };
 
@@ -60,27 +65,17 @@ export const useVoiceOutput = () => {
 
     try {
       const { accent, language } = await getVoiceSettings();
-      const voice = OPENAI_VOICE_MAP[accent] || OPENAI_VOICE_MAP["en-US"];
+      const voiceId = OPENAI_VOICE_MAP[accent] || OPENAI_VOICE_MAP["en-US"];
 
-      const res = await fetch("https://api.openai.com/v1/audio/speech", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini-tts",
-          input: text,
-          voice,
-          format: "mp3",
-          language,
-        }),
+      // Call Supabase edge function instead of OpenAI directly
+      const { data, error } = await supabase.functions.invoke("openai-tts", {
+        body: { text, voiceId, language },
       });
 
-      if (!res.ok) throw new Error(`OpenAI TTS failed: ${res.status}`);
+      if (error) throw error;
+      if (!data?.audioContent) throw new Error("No audio content received");
 
-      const audioBuffer = await res.arrayBuffer();
-      const audioUrl = createAudioUrl(audioBuffer);
+      const audioUrl = createAudioUrl(data.audioContent);
 
       if (audioRef.current) {
         audioRef.current.pause();
