@@ -166,7 +166,6 @@ const Index = () => {
       butter: "fridge",
       apple: "cupboard",
       banana: "cupboard",
-      salmon: "fridge", // adjust as needed
       spaghetti: "cupboard",
     };
 
@@ -179,6 +178,29 @@ const Index = () => {
 
     if (autoAddItem) {
       console.log(`Auto-adding obvious item: ${autoAddItem}`);
+      
+      const category = defaultLocations[autoAddItem];
+
+      // Insert into Supabase
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+
+      if (userId) {
+        const { error: insertError } = await supabase
+          .from("pantry_items")
+          .insert({
+            user_id: userId,
+            name: autoAddItem,
+            category: category,
+            quantity: "unknown",
+            is_low: false,
+          });
+        if (insertError) {
+          console.error("Error inserting auto-added item:", insertError.message);
+          toast.error(`Failed to add ${autoAddItem} to pantry`);
+        }
+      }
+      
       const autoAddResponse: SageResponse = {
         action: "add_item",
         payload: {

@@ -35,7 +35,6 @@ serve(async (req) => {
       butter: "fridge",
       apple: "cupboard",
       banana: "cupboard",
-      salmon: "fridge", // or freezer if preferred
       spaghetti: "cupboard",
     };
 
@@ -45,8 +44,9 @@ serve(async (req) => {
         userAnswer.toLowerCase().includes(cat)
       );
 
-      if (normalizedCategory) {
+      if (normalizedCategory && pending_item) {
         console.log(`Adding pending item "${pending_item}" to category "${normalizedCategory}"`);
+        console.log("UserAnswer:", userAnswer, "PendingItem:", pending_item, "NormalizedCategory:", normalizedCategory);
 
         const sageResponse = {
           action: "add_item",
