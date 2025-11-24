@@ -102,11 +102,11 @@ const Index = () => {
   // Timeout mechanism for pending category questions
   useEffect(() => {
     if (lastItem) {
-      // Set 60-second timeout to auto-cancel pending question
+      // Set 2-minute timeout to auto-cancel pending question
       const timeout = setTimeout(() => {
         setLastItem(null);
         toast.info("Category question timed out");
-      }, 60000);
+      }, 120000);
       
       setPendingTimeout(timeout);
       
