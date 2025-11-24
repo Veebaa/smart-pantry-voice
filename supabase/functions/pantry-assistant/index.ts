@@ -23,28 +23,23 @@ serve(async (req) => {
     } = await req.json();
 
     // Handle follow-up category locally
-    if (pending_item && userAnswer && ["fridge", "freezer", "cupboard", "pantry_staples"].includes(userAnswer.toLowerCase())) {
-      const category = userAnswer.toLowerCase();
+    const categories = ["fridge", "freezer", "cupboard", "pantry_staples"];
+    const normalizedCategory = categories.find(cat => userAnswer.toLowerCase().includes(cat));
+
+    if (pending_item && normalizedCategory) {
+      const category = normalizedCategory;
+
       const sageResponse = {
         action: "add_item",
-        payload: {
-          items: [
-            {
-              name: pending_item,
-              category,
-              quantity: "unknown",
-              is_low: false,
-            },
-          ],
-        },
-        speak: `Lovely! I've added ${pending_item} to your ${category}.`,
+        payload: { items: [{ name: pending_item, category, quantity: "unknown", is_low: false }] },
+        speak: `Lovely! I've added ${pending_item} to your ${category}.`
       };
 
-      console.log("Resolved pending item locally:", sageResponse);
       return new Response(JSON.stringify(sageResponse), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
 
     console.log("Processing pantry request...");
 
