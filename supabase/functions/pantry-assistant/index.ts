@@ -12,8 +12,29 @@ serve(async (req) => {
   }
 
   try {
-    const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem } = await req.json();
-    
+    // Parse the request body
+    const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem, userAnswer, pending_item } = await req.json();
+
+    if (userAnswer && pending_item) {
+      const category = userAnswer.trim().toLowerCase();
+
+      return new Response(JSON.stringify({
+        action: "add_item",
+        payload: {
+          items: [
+            {
+              name: pending_item,
+              category,
+              quantity: "unknown"
+            }
+          ]
+        },
+        speak: `Lovely! I've added ${pending_item} to your ${category}.`
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // Security: Basic logging without sensitive details
     console.log("Processing pantry request");
 

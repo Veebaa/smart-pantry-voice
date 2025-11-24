@@ -161,19 +161,27 @@ const Index = () => {
         .filter((f) => f.active)
         .map((f) => f.id);
 
-      // Check if we're answering a clarification question
-      const { data, error } = await supabase.functions.invoke(
-        "pantry-assistant",
-        {
-          body: {
-            voiceInput: transcript,
+      // If we have a pending item, send the follow-up as userAnswer + pending_item
+      const invocationBody = lastItem
+        ? {
+            userAnswer: transcript,         // e.g. "fridge"
+            pending_item: lastItem,         // e.g. "Salmon" — use snake_case to match edge fn
             dietaryRestrictions: settings?.dietary_restrictions || [],
             householdSize: settings?.household_size || 2,
             recipeFilters: activeFilters,
-            lastItem: lastItem
-          },
-        }
+          }
+        : {
+            voiceInput: transcript,         // normal flow (no pending question)
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+          };
+
+      const { data, error } = await supabase.functions.invoke(
+        "pantry-assistant",
+        { body: invocationBody }
       );
+
 
       if (error) throw error;
 
