@@ -157,6 +157,50 @@ const Index = () => {
 
     const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
+    // Map of obvious items to default categories
+    const defaultLocations: Record<string, string> = {
+      yoghurt: "fridge",
+      milk: "fridge",
+      cheese: "fridge",
+      eggs: "fridge",
+      butter: "fridge",
+      apple: "cupboard",
+      banana: "cupboard",
+      salmon: "fridge", // adjust as needed
+      spaghetti: "cupboard",
+    };
+
+    const lowerTranscript = transcript.toLowerCase();
+
+    // Check if this is a default item that should auto-add
+    const autoAddItem = Object.keys(defaultLocations).find(item =>
+      lowerTranscript.includes(item)
+    );
+
+    if (autoAddItem) {
+      console.log(`Auto-adding obvious item: ${autoAddItem}`);
+      const autoAddResponse: SageResponse = {
+        action: "add_item",
+        payload: {
+          items: [
+            {
+              name: autoAddItem,
+              category: defaultLocations[autoAddItem],
+              quantity: "unknown",
+              is_low: false,
+            },
+          ],
+        },
+        speak: `Added ${autoAddItem} to the ${defaultLocations[autoAddItem]}.`,
+      };
+      setSageResponse(autoAddResponse);
+      speak(autoAddResponse.speak);
+      await fetchPantryItems();
+      setProcessing(false);
+      return;
+    }
+
+    // Prepare body for Edge function
     const invocationBody: Record<string, any> = lastItem
       ? {
           userAnswer: transcript,
@@ -183,7 +227,6 @@ const Index = () => {
 
     console.log("Raw Sage response from Edge:", data);
 
-    // Handle 'ask' action (pending category question)
     if (data.action === "ask") {
       if (data.payload?.pending_item) {
         console.log("Pending item set:", data.payload.pending_item);
@@ -198,14 +241,12 @@ const Index = () => {
       return;
     }
 
-    // Handle add_item action
     if (data.action === "add_item") {
       console.log("Item added, clearing pending item:", lastItem);
       setLastItem(null);
       toast.success("Pantry updated!");
     }
 
-    // Handle none action explicitly
     if (data.action === "none") {
       console.log("Action none received, pending item cleared:", lastItem);
       setLastItem(null);
@@ -223,8 +264,6 @@ const Index = () => {
     setProcessing(false);
   }
 };
-
-
 
   const handleFilterToggle = (filterId: string) => {
     setRecipeFilters((prev) =>

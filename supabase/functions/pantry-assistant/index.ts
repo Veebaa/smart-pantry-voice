@@ -11,7 +11,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-    try {
+  try {
     const {
       voiceInput,
       dietaryRestrictions,
@@ -22,24 +22,83 @@ serve(async (req) => {
       pending_item,
     } = await req.json();
 
-    // Handle follow-up category locally
+    console.log("Incoming request:", { voiceInput, userAnswer, pending_item, lastItem });
+
     const categories = ["fridge", "freezer", "cupboard", "pantry_staples"];
-    const normalizedCategory = categories.find(cat => userAnswer.toLowerCase().includes(cat));
 
-    if (normalizedCategory) {
-      const sageResponse = {
-        action: "add_item",
-        payload: { items: [{ name: pending_item, category: normalizedCategory, quantity: "unknown", is_low: false }] },
-        speak: `Lovely! I've added ${pending_item} to your ${normalizedCategory}.`
-      };
+    // Default locations for obvious items
+    const defaultLocations: Record<string, string> = {
+      yoghurt: "fridge",
+      milk: "fridge",
+      cheese: "fridge",
+      eggs: "fridge",
+      butter: "fridge",
+      apple: "cupboard",
+      banana: "cupboard",
+      salmon: "fridge", // or freezer if preferred
+      spaghetti: "cupboard",
+    };
 
-      return new Response(JSON.stringify(sageResponse), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Handle follow-up category locally (userAnswer for pending_item)
+    if (pending_item && userAnswer) {
+      const normalizedCategory = categories.find(cat =>
+        userAnswer.toLowerCase().includes(cat)
+      );
+
+      if (normalizedCategory) {
+        console.log(`Adding pending item "${pending_item}" to category "${normalizedCategory}"`);
+
+        const sageResponse = {
+          action: "add_item",
+          payload: {
+            items: [
+              {
+                name: pending_item,
+                category: normalizedCategory,
+                quantity: "unknown",
+                is_low: false
+              }
+            ]
+          },
+          speak: `Lovely! I've added ${pending_item} to your ${normalizedCategory}.`
+        };
+
+        return new Response(JSON.stringify(sageResponse), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else {
+        console.log(`Could not determine category from userAnswer: "${userAnswer}"`);
+      }
     }
 
+    // Auto-add if item has obvious default location
+    if (pending_item) {
+      const lowerItem = pending_item.toLowerCase();
+      if (defaultLocations[lowerItem]) {
+        console.log(`Auto-assigning "${pending_item}" to default category "${defaultLocations[lowerItem]}"`);
 
-    console.log("Processing pantry request...");
+        const sageResponse = {
+          action: "add_item",
+          payload: {
+            items: [
+              {
+                name: pending_item,
+                category: defaultLocations[lowerItem],
+                quantity: "unknown",
+                is_low: false
+              }
+            ]
+          },
+          speak: `Added ${pending_item} to the ${defaultLocations[lowerItem]}.`
+        };
+
+        return new Response(JSON.stringify(sageResponse), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    console.log("Processing pantry request via AI...");
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -47,37 +106,27 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader! } },
     });
 
-    // Fetch pantry items
     const { data: pantryItems, error: pantryError } = await supabase
       .from("pantry_items")
       .select("*");
 
     if (pantryError) throw new Error("Failed to fetch pantry items");
-
     console.log(`Fetched ${pantryItems?.length || 0} pantry items`);
 
-    // System prompt for Sage
+    // Construct system prompt
     const systemPrompt = `You are Sage, the kitchen assistant.
 Your job is to interpret the user's speech text, determine their intent, and return a JSON action.
 
 RULES:
 1. If the user adds an item without a category, set action="ask", pending_item="ItemName", and speak: "Fridge, freezer, or cupboard?"
-
-2. **CRITICAL FOLLOW-UP RULE**: If there is a lastItem waiting (see PENDING ITEM below) AND the user's response contains ANY mention of a storage location (fridge, freezer, cupboard, pantry, or variations like "put it in the fridge", "the fridge", "in fridge", etc.):
-   - Extract the category from their response
-   - Set action="add_item" 
-   - In payload.items, include: [{"name": "<lastItem>", "category": "<extracted category>", "quantity": "unknown"}]
-   - Speak: "Lovely! I've added <lastItem> to your <category>."
-   - DO NOT ask for clarification again. The lastItem + their category response = add the item NOW.
-
-3. If the user says "skip", "cancel", "never mind" when there's a pending item, respond with action="none" and acknowledge.
-
-4. For any other command (update quantity, suggest meals, etc.), handle normally.
+2. If a pending item exists and userAnswer includes a storage category, extract category, set action="add_item", add item, speak confirmation, clear pending item.
+3. If user says "skip", "cancel", "never mind", respond with action="none".
+4. Otherwise, handle normal commands.
 
 Current pantry inventory:
 ${JSON.stringify(pantryItems, null, 2)}
@@ -86,27 +135,9 @@ ${lastItem ? `PENDING ITEM WAITING FOR CATEGORY: "${lastItem}"` : ''}
 
 Dietary restrictions: ${dietaryRestrictions?.join(", ") || "None"}
 Household size: ${householdSize || 2} people
+Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No specific preferences"}
+`;
 
-Recipe preferences: ${recipeFilters && recipeFilters.length > 0 ? recipeFilters.map((f: string) => {
-  const filterMap: Record<string, string> = {
-    vegetarian: "Vegetarian (no meat)",
-    vegan: "Vegan (no animal products)",
-    gluten_free: "Gluten-free",
-    dairy_free: "Dairy-free",
-    nut_free: "Nut-free",
-    quick_meals: "Quick meals under 30 minutes",
-    kid_friendly: "Kid-friendly (mild flavors, familiar ingredients)"
-  };
-  return filterMap[f] || f;
-}).join(", ") : "No specific preferences"}
-
-IMPORTANT: 
-- When suggesting meals, STRICTLY adhere to all active recipe preferences. Only suggest recipes that match ALL selected filters.
-- Use warm, friendly language like "Lovely! I've added milk to your fridge." or "Here's what you can make tonight..."
-- The "speak" field should contain what you say to the user. This will be converted to speech.
-- NO AUDIO OUTPUT. NO BASE64. Only text in "speak" is for TTS.`;
-
-    // Define tool for structured responses
     const tools = [
       {
         type: "function",
@@ -116,14 +147,9 @@ IMPORTANT:
           parameters: {
             type: "object",
             properties: {
-              action: {
-                type: "string",
-                enum: ["add_item", "update_item", "ask", "none"],
-                description: "The action to take"
-              },
+              action: { type: "string", enum: ["add_item", "update_item", "ask", "none"] },
               payload: {
                 type: "object",
-                description: "Action-specific data",
                 properties: {
                   items: {
                     type: "array",
@@ -131,51 +157,16 @@ IMPORTANT:
                       type: "object",
                       properties: {
                         name: { type: "string" },
-                        category: {
-                          type: "string",
-                          enum: ["fridge", "freezer", "cupboard", "pantry_staples"]
-                        },
+                        category: { type: "string", enum: categories },
                         quantity: { type: "string" },
                         is_low: { type: "boolean" }
                       }
                     }
                   },
-                  meal_suggestions: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        ingredients_available: { type: "array", items: { type: "string" } },
-                        ingredients_needed: { type: "array", items: { type: "string" } },
-                        recipe: {
-                          type: "object",
-                          properties: {
-                            ingredients_with_quantities: { 
-                              type: "array", 
-                              items: { type: "string" }
-                            },
-                            cooking_steps: { 
-                              type: "array", 
-                              items: { type: "string" }
-                            },
-                            tips: { type: "string" }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  shopping_list: {
-                    type: "array",
-                    items: { type: "string" }
-                  },
                   pending_item: { type: "string" }
                 }
               },
-              speak: {
-                type: "string",
-                description: "What Sage says to the user (will be converted to speech)"
-              }
+              speak: { type: "string" }
             },
             required: ["action", "speak"],
             additionalProperties: false
@@ -202,49 +193,32 @@ IMPORTANT:
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      throw new Error(`AI gateway error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
-    // Security: Log AI response status without full content
-    console.log("AI response received successfully");
+    console.log("AI response received:", JSON.stringify(aiResponse?.choices?.[0]?.message?.tool_calls?.[0] || {}));
 
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
-    
-    if (!toolCall) {
-      throw new Error("No tool call in AI response");
-    }
+    if (!toolCall) throw new Error("No tool call in AI response");
 
     const sageResponse = JSON.parse(toolCall.function.arguments);
-    console.log("Sage action:", sageResponse.action);
+    console.log("Sage action:", sageResponse.action, "Pending item in response:", sageResponse.payload?.pending_item);
 
-    // Handle database updates for add_item action
+    // Handle add_item in DB
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 
       if (userId) {
         for (const item of sageResponse.payload.items) {
-          // Security: Validate item data before insertion
           if (!item.name || !item.category) {
-            console.warn("Invalid item data, skipping:", item.name);
+            console.warn("Invalid item data, skipping:", item);
             continue;
           }
-          
+
           const { error: insertError } = await supabase
             .from("pantry_items")
             .insert({
@@ -255,27 +229,20 @@ IMPORTANT:
               is_low: item.is_low || false
             });
 
-          if (insertError) {
-            console.error("Error inserting item:", insertError.message);
-          }
+          if (insertError) console.error("Error inserting item:", insertError.message);
+          else console.log(`Inserted item "${item.name}" into category "${item.category}"`);
         }
       }
     }
 
-    return new Response(
-      JSON.stringify(sageResponse),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify(sageResponse), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Error in pantry-assistant:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
