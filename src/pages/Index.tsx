@@ -148,6 +148,7 @@ const Index = () => {
 
   const handleVoiceInput = async (transcript: string) => {
   setProcessing(true);
+  
   try {
     const { data: settings } = await supabase
       .from("user_settings")
@@ -242,7 +243,10 @@ const Index = () => {
 
     const { data, error } = await supabase.functions.invoke(
       "pantry-assistant",
-      { body: invocationBody }
+      { body: invocationBody,
+        headers: { Authorization: `Bearer ${user?.access_token}` }
+       }
+    
     );
 
     if (error) throw error;
