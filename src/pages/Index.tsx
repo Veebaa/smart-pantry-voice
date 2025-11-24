@@ -159,157 +159,168 @@ const Index = () => {
     }
   };
 
-  const handleVoiceInput = async (transcript: string) => {
-    setProcessing(true);
+const handleVoiceInput = async (transcript: string) => {
+  setProcessing(true);
 
-    try {
-      // Get current session and access token
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const currentUser = sessionData?.session?.user;
+  try {
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
 
-      if (!currentUser || !accessToken) {
-        toast.error("User not authenticated. Please sign in again.");
-        setProcessing(false);
-        return;
-      }
+    const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
-      const { data: settings } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", currentUser.id)
-        .single();
+    // Map of obvious items to default categories
+    const defaultLocations: Record<string, string> = {
+      yoghurt: "fridge",
+      milk: "fridge",
+      cheese: "fridge",
+      eggs: "fridge",
+      butter: "fridge",
+      apple: "cupboard",
+      banana: "cupboard",
+      spaghetti: "cupboard",
+    };
 
-      const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
+    const lowerTranscript = transcript.toLowerCase();
 
-      // Map of obvious items to default categories
-      const defaultLocations: Record<string, string> = {
-        yoghurt: "fridge",
-        milk: "fridge",
-        cheese: "fridge",
-        eggs: "fridge",
-        butter: "fridge",
-        apple: "cupboard",
-        banana: "cupboard",
-        spaghetti: "cupboard",
-      };
+    // Auto-add obvious items
+    const autoAddItem = Object.keys(defaultLocations).find(item =>
+      lowerTranscript.includes(item)
+    );
 
-      const lowerTranscript = transcript.toLowerCase();
+    if (autoAddItem) {
+      console.log(`Auto-adding obvious item: ${autoAddItem}`);
+      const category = defaultLocations[autoAddItem];
 
-      // Check if this is a default item that should auto-add
-      const autoAddItem = Object.keys(defaultLocations).find(item =>
-        lowerTranscript.includes(item)
-      );
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
 
-      if (autoAddItem) {
-        console.log(`Auto-adding obvious item: ${autoAddItem}`);
-
-        const category = defaultLocations[autoAddItem];
-
+      if (userId) {
         const { error: insertError } = await supabase
           .from("pantry_items")
           .insert({
-            user_id: currentUser.id,
+            user_id: userId,
             name: autoAddItem,
-            category,
+            category: category,
             quantity: "unknown",
             is_low: false,
           });
-
         if (insertError) {
           console.error("Error inserting auto-added item:", insertError.message);
           toast.error(`Failed to add ${autoAddItem} to pantry`);
         }
-
-        const autoAddResponse: SageResponse = {
-          action: "add_item",
-          payload: {
-            items: [
-              {
-                name: autoAddItem,
-                category,
-                quantity: "unknown",
-                is_low: false,
-              },
-            ],
-          },
-          speak: `Added ${autoAddItem} to the ${category}.`,
-        };
-        setSageResponse(autoAddResponse);
-        speak(autoAddResponse.speak);
-        await fetchPantryItems();
-        setProcessing(false);
-        return;
       }
 
-      // Prepare body for Edge Function
-      const invocationBody: Record<string, any> = lastItem
-        ? {
-            userAnswer: transcript,
-            pending_item: lastItem,
-            dietaryRestrictions: settings?.dietary_restrictions || [],
-            householdSize: settings?.household_size || 2,
-            recipeFilters: activeFilters,
-          }
-        : {
-            voiceInput: transcript,
-            dietaryRestrictions: settings?.dietary_restrictions || [],
-            householdSize: settings?.household_size || 2,
-            recipeFilters: activeFilters,
-          };
+      const autoAddResponse: SageResponse = {
+        action: "add_item",
+        payload: {
+          items: [
+            { name: autoAddItem, category, quantity: "unknown", is_low: false },
+          ],
+        },
+        speak: `Added ${autoAddItem} to the ${category}.`,
+      };
 
-      console.log("Sending to Edge Function:", invocationBody);
+      setSageResponse(autoAddResponse);
 
-      const { data, error } = await supabase.functions.invoke(
-        "pantry-assistant",
-        { 
-          body: invocationBody,
-          headers: { Authorization: `Bearer ${accessToken}` } 
-        }
-      );
+      // Speak and reopen mic only after speech ends
+      speak(autoAddResponse.speak, {
+        onend: async () => {
+          await fetchPantryItems();
+          const voiceInputEl = document.getElementById("voice-input-button");
+          if (voiceInputEl) voiceInputEl.click();
+        },
+      });
 
-      if (error) throw error;
-
-      console.log("Raw Sage response from Edge:", data);
-
-      if (data.action === "ask") {
-        if (data.payload?.pending_item) {
-          console.log("Pending item set:", data.payload.pending_item);
-          setLastItem(data.payload.pending_item);
-        } else {
-          console.warn("Received 'ask' without payload.pending_item");
-        }
-        setOpenMicAfterSpeak(true);
-        speak(data.speak);
-        toast.info(data.speak);
-        setProcessing(false);
-        return;
-      }
-
-      if (data.action === "add_item") {
-        console.log("Item added, clearing pending item:", lastItem);
-        setLastItem(null);
-        toast.success("Pantry updated!");
-      }
-
-      if (data.action === "none") {
-        console.log("Action none received, pending item cleared:", lastItem);
-        setLastItem(null);
-        toast.info(data.speak || "Action skipped");
-      }
-
-      setSageResponse(data);
-      if (data.speak) speak(data.speak);
-      await fetchPantryItems();
-
-    } catch (error: any) {
-      console.error("Error processing voice input:", error);
-      toast.error(error.message || "Failed to process voice command");
-    } finally {
       setProcessing(false);
+      return;
     }
-  };
 
+    // Prepare Edge function payload
+    const invocationBody: Record<string, any> = lastItem
+      ? {
+          userAnswer: transcript,
+          pending_item: lastItem,
+          dietaryRestrictions: settings?.dietary_restrictions || [],
+          householdSize: settings?.household_size || 2,
+          recipeFilters: activeFilters,
+        }
+      : {
+          voiceInput: transcript,
+          dietaryRestrictions: settings?.dietary_restrictions || [],
+          householdSize: settings?.household_size || 2,
+          recipeFilters: activeFilters,
+        };
+
+    console.log("Sending to Edge Function:", invocationBody);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+
+    const { data, error } = await supabase.functions.invoke(
+      "pantry-assistant",
+      {
+        body: invocationBody,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (error) throw error;
+
+    console.log("Raw Sage response from Edge:", data);
+
+    if (data.action === "ask") {
+      if (data.payload?.pending_item) {
+        console.log("Pending item set:", data.payload.pending_item);
+        setLastItem(data.payload.pending_item);
+      }
+      // Speak and reopen mic after speech
+      speak(data.speak, {
+        onend: () => {
+          setOpenMicAfterSpeak(false);
+        },
+      });
+      toast.info(data.speak);
+      setProcessing(false);
+      return;
+    }
+
+    if (data.action === "add_item") {
+      console.log("Item added, clearing pending item:", lastItem);
+      setLastItem(null);
+      toast.success("Pantry updated!");
+    }
+
+    if (data.action === "none") {
+      console.log("Action none received, pending item cleared:", lastItem);
+      setLastItem(null);
+      toast.info(data.speak || "Action skipped");
+    }
+
+    setSageResponse(data);
+
+    // Speak and reopen mic after speech
+    if (data.speak) {
+      speak(data.speak, {
+        onend: async () => {
+          await fetchPantryItems();
+          const voiceInputEl = document.getElementById("voice-input-button");
+          if (voiceInputEl) voiceInputEl.click();
+        },
+      });
+    } else {
+      await fetchPantryItems();
+    }
+
+  } catch (error: any) {
+    console.error("Error processing voice input:", error);
+    toast.error(error.message || "Failed to process voice command");
+  } finally {
+    setProcessing(false);
+  }
+};
 
   const handleFilterToggle = (filterId: string) => {
     setRecipeFilters((prev) =>
