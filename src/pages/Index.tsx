@@ -306,13 +306,21 @@ const handleVoiceInput = async (transcript: string) => {
       speak(data.speak, {
         onend: async () => {
           await fetchPantryItems();
+
+          // Only trigger mic if user is still ready
           const voiceInputEl = document.getElementById("voice-input-button");
-          if (voiceInputEl) voiceInputEl.click();
+
+          setTimeout(() => {
+            if (voiceInputEl && !isSpeaking) voiceInputEl.click();
+          }, 250);
         },
       });
     } else {
       await fetchPantryItems();
+      const voiceInputEl = document.getElementById("voice-input-button");
+      if (voiceInputEl && !isSpeaking) voiceInputEl.click();
     }
+
 
   } catch (error: any) {
     console.error("Error processing voice input:", error);
