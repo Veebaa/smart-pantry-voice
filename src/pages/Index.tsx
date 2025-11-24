@@ -157,7 +157,7 @@ const Index = () => {
 
     const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
-    const invocationBody = lastItem
+    const invocationBody: Record<string, any> = lastItem
       ? {
           userAnswer: transcript,
           pending_item: lastItem,
@@ -300,7 +300,7 @@ const Index = () => {
                       Waiting for category: <span className="font-bold">{lastItem}</span>
                     </p>
                     <p className="text-sm text-orange-700 dark:text-orange-300">
-                      Say "fridge", "freezer", "cupboard" - or say "skip" to cancel (auto-cancel in 60s)
+                      Say "fridge", "freezer", "cupboard" - or say "skip" to cancel (auto-cancel in 120s)
                     </p>
                   </div>
                 </div>
