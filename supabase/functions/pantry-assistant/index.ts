@@ -11,14 +11,20 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    // Parse the request body
-    const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem, userAnswer, pending_item } = await req.json();
+    try {
+    const {
+      voiceInput,
+      dietaryRestrictions,
+      householdSize,
+      recipeFilters,
+      lastItem,
+      userAnswer,
+      pending_item,
+    } = await req.json();
 
-    // Handle pending item + follow-up category locally, bypassing AI if possible
+    // Handle follow-up category locally
     if (pending_item && userAnswer && ["fridge", "freezer", "cupboard", "pantry_staples"].includes(userAnswer.toLowerCase())) {
       const category = userAnswer.toLowerCase();
-
       const sageResponse = {
         action: "add_item",
         payload: {
@@ -27,28 +33,24 @@ serve(async (req) => {
               name: pending_item,
               category,
               quantity: "unknown",
-              is_low: false
-            }
-          ]
+              is_low: false,
+            },
+          ],
         },
-        speak: `Lovely! I've added ${pending_item} to your ${category}.`
+        speak: `Lovely! I've added ${pending_item} to your ${category}.`,
       };
 
+      console.log("Resolved pending item locally:", sageResponse);
       return new Response(JSON.stringify(sageResponse), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-
-    // Security: Basic logging without sensitive details
-    console.log("Processing pantry request");
+    console.log("Processing pantry request...");
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
-    }
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // Get authorization header for Supabase
     const authHeader = req.headers.get("Authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -57,17 +59,13 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader! } },
     });
 
-    // Get user's pantry items
+    // Fetch pantry items
     const { data: pantryItems, error: pantryError } = await supabase
       .from("pantry_items")
       .select("*");
 
-    if (pantryError) {
-      console.error("Error fetching pantry:", pantryError.message);
-      throw new Error("Failed to fetch pantry items");
-    }
+    if (pantryError) throw new Error("Failed to fetch pantry items");
 
-    // Security: Don't log full pantry contents in production
     console.log(`Fetched ${pantryItems?.length || 0} pantry items`);
 
     // System prompt for Sage

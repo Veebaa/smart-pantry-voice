@@ -147,73 +147,83 @@ const Index = () => {
   };
 
   const handleVoiceInput = async (transcript: string) => {
-    setProcessing(true);
-    try {
-      // Get user settings
-      const { data: settings } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
+  setProcessing(true);
+  try {
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
 
-      // Get active recipe filters
-      const activeFilters = recipeFilters
-        .filter((f) => f.active)
-        .map((f) => f.id);
+    const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
-      // Build request body for edge function
-      const invocationBody: Record<string, any> = lastItem
-        ? {
-            userAnswer: transcript,         // e.g. "fridge"
-            pending_item: lastItem,         // previous item waiting for category
-            dietaryRestrictions: settings?.dietary_restrictions || [],
-            householdSize: settings?.household_size || 2,
-            recipeFilters: activeFilters,
-          }
-        : {
-            voiceInput: transcript,         // normal flow
-            dietaryRestrictions: settings?.dietary_restrictions || [],
-            householdSize: settings?.household_size || 2,
-            recipeFilters: activeFilters,
-          };
+    const invocationBody = lastItem
+      ? {
+          userAnswer: transcript,
+          pending_item: lastItem,
+          dietaryRestrictions: settings?.dietary_restrictions || [],
+          householdSize: settings?.household_size || 2,
+          recipeFilters: activeFilters,
+        }
+      : {
+          voiceInput: transcript,
+          dietaryRestrictions: settings?.dietary_restrictions || [],
+          householdSize: settings?.household_size || 2,
+          recipeFilters: activeFilters,
+        };
 
-      const { data, error } = await supabase.functions.invoke(
-        "pantry-assistant",
-        { body: invocationBody }
-      );
+    console.log("Sending to Edge Function:", invocationBody);
 
-      if (error) throw error;
+    const { data, error } = await supabase.functions.invoke(
+      "pantry-assistant",
+      { body: invocationBody }
+    );
 
-      console.log("Sage response:", data);
+    if (error) throw error;
 
-      // If Sage asks for category, save pending item
-      if (data.action === "ask" && data.payload?.pending_item) {
-        setLastItem(data.payload.pending_item);  // persist pending item
-        setOpenMicAfterSpeak(true);              // open mic after speaking
-        speak(data.speak);
-        toast.info(data.speak);
-        setProcessing(false);
-        return;
+    console.log("Raw Sage response from Edge:", data);
+
+    // Handle 'ask' action (pending category question)
+    if (data.action === "ask") {
+      if (data.payload?.pending_item) {
+        console.log("Pending item set:", data.payload.pending_item);
+        setLastItem(data.payload.pending_item);
+      } else {
+        console.warn("Received 'ask' without payload.pending_item");
       }
-
-      // If Sage adds item, clear pending item
-      if (data.action === "add_item") {
-        setLastItem(null);  // resolved, clear pending
-        toast.success("Pantry updated!");
-      }
-
-      setSageResponse(data);
-
-      if (data.speak) speak(data.speak);
-
-      await fetchPantryItems();
-    } catch (error: any) {
-      console.error("Error processing voice input:", error);
-      toast.error(error.message || "Failed to process voice command");
-    } finally {
+      setOpenMicAfterSpeak(true);
+      speak(data.speak);
+      toast.info(data.speak);
       setProcessing(false);
+      return;
     }
-  };
+
+    // Handle add_item action
+    if (data.action === "add_item") {
+      console.log("Item added, clearing pending item:", lastItem);
+      setLastItem(null);
+      toast.success("Pantry updated!");
+    }
+
+    // Handle none action explicitly
+    if (data.action === "none") {
+      console.log("Action none received, pending item cleared:", lastItem);
+      setLastItem(null);
+      toast.info(data.speak || "Action skipped");
+    }
+
+    setSageResponse(data);
+    if (data.speak) speak(data.speak);
+    await fetchPantryItems();
+
+  } catch (error: any) {
+    console.error("Error processing voice input:", error);
+    toast.error(error.message || "Failed to process voice command");
+  } finally {
+    setProcessing(false);
+  }
+};
+
 
 
   const handleFilterToggle = (filterId: string) => {
