@@ -15,25 +15,30 @@ serve(async (req) => {
     // Parse the request body
     const { voiceInput, dietaryRestrictions, householdSize, recipeFilters, lastItem, userAnswer, pending_item } = await req.json();
 
-    if (userAnswer && pending_item) {
-      const category = userAnswer.trim().toLowerCase();
+    // Handle pending item + follow-up category locally, bypassing AI if possible
+    if (pending_item && userAnswer && ["fridge", "freezer", "cupboard", "pantry_staples"].includes(userAnswer.toLowerCase())) {
+      const category = userAnswer.toLowerCase();
 
-      return new Response(JSON.stringify({
+      const sageResponse = {
         action: "add_item",
         payload: {
           items: [
             {
               name: pending_item,
               category,
-              quantity: "unknown"
+              quantity: "unknown",
+              is_low: false
             }
           ]
         },
         speak: `Lovely! I've added ${pending_item} to your ${category}.`
-      }), {
+      };
+
+      return new Response(JSON.stringify(sageResponse), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
 
     // Security: Basic logging without sensitive details
     console.log("Processing pantry request");
