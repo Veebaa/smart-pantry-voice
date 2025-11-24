@@ -63,6 +63,19 @@ const Index = () => {
       setLoading(false);
     });
 
+    const fetchSession = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log("sessionData:", sessionData);
+
+      console.log("user id:", sessionData?.session?.user?.id);
+      console.log("access token:", sessionData?.session?.access_token);
+
+      setUser(sessionData?.session?.user ?? null);
+      setLoading(false);
+  };
+
+    fetchSession(); // call the async function
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
