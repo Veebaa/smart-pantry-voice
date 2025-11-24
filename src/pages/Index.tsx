@@ -161,17 +161,17 @@ const Index = () => {
         .filter((f) => f.active)
         .map((f) => f.id);
 
-      // If we have a pending item, send the follow-up as userAnswer + pending_item
-      const invocationBody = lastItem
+      // Build request body for edge function
+      const invocationBody: Record<string, any> = lastItem
         ? {
             userAnswer: transcript,         // e.g. "fridge"
-            pending_item: lastItem,         // e.g. "Salmon" — use snake_case to match edge fn
+            pending_item: lastItem,         // previous item waiting for category
             dietaryRestrictions: settings?.dietary_restrictions || [],
             householdSize: settings?.household_size || 2,
             recipeFilters: activeFilters,
           }
         : {
-            voiceInput: transcript,         // normal flow (no pending question)
+            voiceInput: transcript,         // normal flow
             dietaryRestrictions: settings?.dietary_restrictions || [],
             householdSize: settings?.household_size || 2,
             recipeFilters: activeFilters,
@@ -182,42 +182,31 @@ const Index = () => {
         { body: invocationBody }
       );
 
-
       if (error) throw error;
 
       console.log("Sage response:", data);
 
-      // Handle "ask" action (clarification needed)
+      // If Sage asks for category, save pending item
       if (data.action === "ask" && data.payload?.pending_item) {
-        // Store pending item so we can attach the user's next answer to it
-        setLastItem(data.payload.pending_item);
-
-        // Mark that we want to open the mic after speaking finishes
-        setOpenMicAfterSpeak(true);
-
-        // Speak the question (speak only accepts the text argument)
+        setLastItem(data.payload.pending_item);  // persist pending item
+        setOpenMicAfterSpeak(true);              // open mic after speaking
         speak(data.speak);
-
         toast.info(data.speak);
         setProcessing(false);
         return;
       }
 
-      // Clear last item if resolved
-      setLastItem(null);
-
-      setSageResponse(data);
-      
-      // Speak Sage's response
-      if (data.speak) {
-        speak(data.speak);
-      }
-
-      await fetchPantryItems();
-      
+      // If Sage adds item, clear pending item
       if (data.action === "add_item") {
+        setLastItem(null);  // resolved, clear pending
         toast.success("Pantry updated!");
       }
+
+      setSageResponse(data);
+
+      if (data.speak) speak(data.speak);
+
+      await fetchPantryItems();
     } catch (error: any) {
       console.error("Error processing voice input:", error);
       toast.error(error.message || "Failed to process voice command");
@@ -225,6 +214,7 @@ const Index = () => {
       setProcessing(false);
     }
   };
+
 
   const handleFilterToggle = (filterId: string) => {
     setRecipeFilters((prev) =>
