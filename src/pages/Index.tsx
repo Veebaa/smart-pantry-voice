@@ -63,18 +63,18 @@ const Index = () => {
       setLoading(false);
     });
 
-    const fetchSession = async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log("sessionData:", sessionData);
+  //   const fetchSession = async () => {
+  //     const { data: sessionData } = await supabase.auth.getSession();
+  //     console.log("sessionData:", sessionData);
 
-      console.log("user id:", sessionData?.session?.user?.id);
-      console.log("access token:", sessionData?.session?.access_token);
+  //     console.log("user id:", sessionData?.session?.user?.id);
+  //     console.log("access token:", sessionData?.session?.access_token);
 
-      setUser(sessionData?.session?.user ?? null);
-      setLoading(false);
-  };
+  //     setUser(sessionData?.session?.user ?? null);
+  //     setLoading(false);
+  // };
 
-    fetchSession(); // call the async function
+    // fetchSession(); // call the async function
 
     const {
       data: { subscription },
@@ -160,149 +160,156 @@ const Index = () => {
   };
 
   const handleVoiceInput = async (transcript: string) => {
-  setProcessing(true);
-  
-  try {
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    setProcessing(true);
 
-    const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
+    try {
+      // Get current session and access token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const currentUser = sessionData?.session?.user;
 
-    // Map of obvious items to default categories
-    const defaultLocations: Record<string, string> = {
-      yoghurt: "fridge",
-      milk: "fridge",
-      cheese: "fridge",
-      eggs: "fridge",
-      butter: "fridge",
-      apple: "cupboard",
-      banana: "cupboard",
-      spaghetti: "cupboard",
-    };
+      if (!currentUser || !accessToken) {
+        toast.error("User not authenticated. Please sign in again.");
+        setProcessing(false);
+        return;
+      }
 
-    const lowerTranscript = transcript.toLowerCase();
+      const { data: settings } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .single();
 
-    // Check if this is a default item that should auto-add
-    const autoAddItem = Object.keys(defaultLocations).find(item =>
-      lowerTranscript.includes(item)
-    );
+      const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
-    if (autoAddItem) {
-      console.log(`Auto-adding obvious item: ${autoAddItem}`);
-      
-      const category = defaultLocations[autoAddItem];
+      // Map of obvious items to default categories
+      const defaultLocations: Record<string, string> = {
+        yoghurt: "fridge",
+        milk: "fridge",
+        cheese: "fridge",
+        eggs: "fridge",
+        butter: "fridge",
+        apple: "cupboard",
+        banana: "cupboard",
+        spaghetti: "cupboard",
+      };
 
-      // Insert into Supabase
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
+      const lowerTranscript = transcript.toLowerCase();
 
-      if (userId) {
+      // Check if this is a default item that should auto-add
+      const autoAddItem = Object.keys(defaultLocations).find(item =>
+        lowerTranscript.includes(item)
+      );
+
+      if (autoAddItem) {
+        console.log(`Auto-adding obvious item: ${autoAddItem}`);
+
+        const category = defaultLocations[autoAddItem];
+
         const { error: insertError } = await supabase
           .from("pantry_items")
           .insert({
-            user_id: userId,
+            user_id: currentUser.id,
             name: autoAddItem,
-            category: category,
+            category,
             quantity: "unknown",
             is_low: false,
           });
+
         if (insertError) {
           console.error("Error inserting auto-added item:", insertError.message);
           toast.error(`Failed to add ${autoAddItem} to pantry`);
         }
-      }
-      
-      const autoAddResponse: SageResponse = {
-        action: "add_item",
-        payload: {
-          items: [
-            {
-              name: autoAddItem,
-              category: defaultLocations[autoAddItem],
-              quantity: "unknown",
-              is_low: false,
-            },
-          ],
-        },
-        speak: `Added ${autoAddItem} to the ${defaultLocations[autoAddItem]}.`,
-      };
-      setSageResponse(autoAddResponse);
-      speak(autoAddResponse.speak);
-      await fetchPantryItems();
-      setProcessing(false);
-      return;
-    }
 
-    // Prepare body for Edge function
-    const invocationBody: Record<string, any> = lastItem
-      ? {
-          userAnswer: transcript,
-          pending_item: lastItem,
-          dietaryRestrictions: settings?.dietary_restrictions || [],
-          householdSize: settings?.household_size || 2,
-          recipeFilters: activeFilters,
-        }
-      : {
-          voiceInput: transcript,
-          dietaryRestrictions: settings?.dietary_restrictions || [],
-          householdSize: settings?.household_size || 2,
-          recipeFilters: activeFilters,
+        const autoAddResponse: SageResponse = {
+          action: "add_item",
+          payload: {
+            items: [
+              {
+                name: autoAddItem,
+                category,
+                quantity: "unknown",
+                is_low: false,
+              },
+            ],
+          },
+          speak: `Added ${autoAddItem} to the ${category}.`,
         };
-
-    console.log("Sending to Edge Function:", invocationBody);
-
-    const { data, error } = await supabase.functions.invoke(
-      "pantry-assistant",
-      { body: invocationBody,
-        headers: { Authorization: `Bearer ${user?.access_token}` }
-       }
-    
-    );
-
-    if (error) throw error;
-
-    console.log("Raw Sage response from Edge:", data);
-
-    if (data.action === "ask") {
-      if (data.payload?.pending_item) {
-        console.log("Pending item set:", data.payload.pending_item);
-        setLastItem(data.payload.pending_item);
-      } else {
-        console.warn("Received 'ask' without payload.pending_item");
+        setSageResponse(autoAddResponse);
+        speak(autoAddResponse.speak);
+        await fetchPantryItems();
+        setProcessing(false);
+        return;
       }
-      setOpenMicAfterSpeak(true);
-      speak(data.speak);
-      toast.info(data.speak);
+
+      // Prepare body for Edge Function
+      const invocationBody: Record<string, any> = lastItem
+        ? {
+            userAnswer: transcript,
+            pending_item: lastItem,
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+          }
+        : {
+            voiceInput: transcript,
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+          };
+
+      console.log("Sending to Edge Function:", invocationBody);
+
+      const { data, error } = await supabase.functions.invoke(
+        "pantry-assistant",
+        { 
+          body: invocationBody,
+          headers: { Authorization: `Bearer ${accessToken}` } 
+        }
+      );
+
+      if (error) throw error;
+
+      console.log("Raw Sage response from Edge:", data);
+
+      if (data.action === "ask") {
+        if (data.payload?.pending_item) {
+          console.log("Pending item set:", data.payload.pending_item);
+          setLastItem(data.payload.pending_item);
+        } else {
+          console.warn("Received 'ask' without payload.pending_item");
+        }
+        setOpenMicAfterSpeak(true);
+        speak(data.speak);
+        toast.info(data.speak);
+        setProcessing(false);
+        return;
+      }
+
+      if (data.action === "add_item") {
+        console.log("Item added, clearing pending item:", lastItem);
+        setLastItem(null);
+        toast.success("Pantry updated!");
+      }
+
+      if (data.action === "none") {
+        console.log("Action none received, pending item cleared:", lastItem);
+        setLastItem(null);
+        toast.info(data.speak || "Action skipped");
+      }
+
+      setSageResponse(data);
+      if (data.speak) speak(data.speak);
+      await fetchPantryItems();
+
+    } catch (error: any) {
+      console.error("Error processing voice input:", error);
+      toast.error(error.message || "Failed to process voice command");
+    } finally {
       setProcessing(false);
-      return;
     }
+  };
 
-    if (data.action === "add_item") {
-      console.log("Item added, clearing pending item:", lastItem);
-      setLastItem(null);
-      toast.success("Pantry updated!");
-    }
-
-    if (data.action === "none") {
-      console.log("Action none received, pending item cleared:", lastItem);
-      setLastItem(null);
-      toast.info(data.speak || "Action skipped");
-    }
-
-    setSageResponse(data);
-    if (data.speak) speak(data.speak);
-    await fetchPantryItems();
-
-  } catch (error: any) {
-    console.error("Error processing voice input:", error);
-    toast.error(error.message || "Failed to process voice command");
-  } finally {
-    setProcessing(false);
-  }
-};
 
   const handleFilterToggle = (filterId: string) => {
     setRecipeFilters((prev) =>
