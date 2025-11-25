@@ -1,12 +1,33 @@
 const API_BASE_URL = "";
+const TOKEN_KEY = "sage_auth_token";
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setAuthToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAuthToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
 
 export async function apiRequest(method: string, endpoint: string, data?: any) {
   const options: RequestInit = {
     method,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
     },
-    credentials: "include",
   };
 
   if (data) {
@@ -28,9 +49,9 @@ async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...options.headers,
     },
-    credentials: "include",
   });
 
   if (!response.ok) {

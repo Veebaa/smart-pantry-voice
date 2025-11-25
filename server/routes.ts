@@ -36,14 +36,7 @@ router.post("/api/auth/signup", async (req, res) => {
     
     const session = await createSession(user.id);
     
-    res.cookie("session_token", session.token, {
-      httpOnly: true,
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: "none",
-    });
-    
-    res.json({ user: { id: user.id, email: user.email } });
+    res.json({ user: { id: user.id, email: user.email }, token: session.token });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
@@ -75,14 +68,7 @@ router.post("/api/auth/signin", async (req, res) => {
     
     const session = await createSession(user.id);
     
-    res.cookie("session_token", session.token, {
-      httpOnly: true,
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: "none",
-    });
-    
-    res.json({ user: { id: user.id, email: user.email } });
+    res.json({ user: { id: user.id, email: user.email }, token: session.token });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
@@ -91,10 +77,17 @@ router.post("/api/auth/signin", async (req, res) => {
   }
 });
 
-router.post("/api/auth/signout", requireAuth, async (req, res) => {
-  const sessionToken = req.cookies.session_token;
-  if (sessionToken) {
-    await db.delete(sessions).where(eq(sessions.token, sessionToken));
+router.post("/api/auth/signout", async (req, res) => {
+  // Get token from Authorization header or cookie
+  const authHeader = req.headers.authorization;
+  let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  
+  if (!token) {
+    token = req.cookies.session_token;
+  }
+  
+  if (token) {
+    await db.delete(sessions).where(eq(sessions.token, token));
   }
   res.clearCookie("session_token");
   res.json({ success: true });

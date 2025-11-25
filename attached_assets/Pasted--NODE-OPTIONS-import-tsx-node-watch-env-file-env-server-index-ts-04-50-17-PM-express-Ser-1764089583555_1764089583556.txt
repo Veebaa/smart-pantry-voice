@@ -1,0 +1,27 @@
+$ NODE_OPTIONS='--import tsx' node --watch --env-file=.env server/index.ts
+04:50:17 PM [express] Server running on port 5000
+04:50:21 PM [express] GET /api/auth/user 401 in 2ms :: {"error":"Not authenticated"}
+04:50:32 PM [express] GET /api/auth/user 401 in 0ms :: {"error":"Not authenticated"}
+04:51:35 PM [express] POST /api/auth/signin 200 in 510ms :: {"user":{"id":"dc105473-fdd7-424f-ab98-6f…
+04:51:35 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:51:40 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:51:43 PM [express] POST /api/auth/signout 401 in 0ms :: {"error":"Not authenticated"}
+04:51:45 PM [express] POST /api/auth/signout 401 in 0ms :: {"error":"Not authenticated"}
+04:51:45 PM [express] POST /api/auth/signout 401 in 0ms :: {"error":"Not authenticated"}
+04:51:45 PM [express] POST /api/auth/signout 401 in 1ms :: {"error":"Not authenticated"}
+04:51:45 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:51:46 PM [express] POST /api/auth/signout 401 in 0ms :: {"error":"Not authenticated"}
+04:51:46 PM [express] POST /api/auth/signout 401 in 0ms :: {"error":"Not authenticated"}
+04:51:50 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:51:55 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:52:00 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:52:05 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:52:10 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:52:15 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:52:20 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:52:25 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:52:30 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:52:35 PM [express] GET /api/pantry-items 401 in 5ms :: {"error":"Not authenticated"}
+04:52:40 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenti04:52:45 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}
+04:52:50 PM [express] GET /api/pantry-items 401 in 1ms :: {"error":"Not authenticated"}
+04:52:55 PM [express] GET /api/pantry-items 401 in 0ms :: {"error":"Not authenticated"}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/api";
 
 interface User {
   id: string;
@@ -26,18 +26,31 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const checkAuth = async () => {
     try {
+      // Only check auth if we have a token
+      const token = getAuthToken();
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
       const response = await fetch("/api/auth/user", {
-        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
       } else {
+        // Token is invalid, clear it
+        clearAuthToken();
         setUser(null);
       }
     } catch (error) {
       console.error("Auth check failed:", error);
+      clearAuthToken();
       setUser(null);
     } finally {
       setLoading(false);
@@ -46,16 +59,27 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/signin", { email, password });
+    if (response.token) {
+      setAuthToken(response.token);
+    }
     setUser(response.user);
   };
 
   const signup = async (email: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/signup", { email, password });
+    if (response.token) {
+      setAuthToken(response.token);
+    }
     setUser(response.user);
   };
 
   const logout = async () => {
-    await apiRequest("POST", "/api/auth/signout", {});
+    try {
+      await apiRequest("POST", "/api/auth/signout", {});
+    } catch (error) {
+      // Ignore errors on signout
+    }
+    clearAuthToken();
     setUser(null);
   };
 

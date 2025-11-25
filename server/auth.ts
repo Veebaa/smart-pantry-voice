@@ -54,7 +54,13 @@ export async function getSessionUser(token: string) {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.cookies.session_token;
+  // Try Authorization header first (Bearer token), then fall back to cookie
+  const authHeader = req.headers.authorization;
+  let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  
+  if (!token) {
+    token = req.cookies.session_token;
+  }
   
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });

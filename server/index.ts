@@ -8,6 +8,9 @@ import { createServer } from "http";
 const app = express();
 const server = createServer(app);
 
+// Trust proxy for cookies to work behind Replit's proxy
+app.set("trust proxy", 1);
+
 app.use(cors({
   origin: true,
   credentials: true,
