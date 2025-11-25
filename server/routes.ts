@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { db } from "./db";
+import { db } from "./db.js";
 import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "@db/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
-import { requireAuth, hashPassword, comparePassword, createSession } from "./auth";
+import { requireAuth, hashPassword, comparePassword, createSession } from "./auth.js";
 import { z } from "zod";
-import { classifyItem, formatClarificationQuestion, getClassificationForAI } from "./itemClassifier";
+import { classifyItem, formatClarificationQuestion, getClassificationForAI } from "./itemClassifier.js";
 import { randomUUID } from "crypto";
 
 const router = Router();

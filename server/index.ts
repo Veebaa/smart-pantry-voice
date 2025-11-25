@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import routes from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import routes from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
