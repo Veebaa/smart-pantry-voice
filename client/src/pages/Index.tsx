@@ -204,9 +204,11 @@ const Index = () => {
       console.log("Raw Sage response from API:", data);
 
       if (data.action === "ask") {
-        if (data.payload?.pending_item) {
-          console.log("Pending item set:", data.payload.pending_item);
-          setLastItem(data.payload.pending_item);
+        // Check both root level and payload for pending_item
+        const pendingItem = data.pending_item || data.payload?.pending_item;
+        if (pendingItem) {
+          console.log("Pending item set:", pendingItem);
+          setLastItem(pendingItem);
         }
         speak(data.speak, {
           onend: () => {

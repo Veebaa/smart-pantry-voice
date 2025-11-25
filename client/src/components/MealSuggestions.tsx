@@ -33,7 +33,7 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
   const fetchFavorites = async () => {
     try {
       const data = await apiRequest("GET", "/api/favorite-recipes");
-      setFavorites(data?.map((f: any) => f.recipe_name) || []);
+      setFavorites(data?.map((f: any) => f.recipeName) || []);
     } catch (error) {
       console.error("Error fetching favorites:", error);
     }
@@ -45,7 +45,7 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
 
       if (isFavorite) {
         const data = await apiRequest("GET", "/api/favorite-recipes");
-        const favoriteToDelete = data?.find((f: any) => f.recipe_name === meal.name);
+        const favoriteToDelete = data?.find((f: any) => f.recipeName === meal.name);
         
         if (favoriteToDelete) {
           await apiRequest("DELETE", `/api/favorite-recipes/${favoriteToDelete.id}`);
@@ -58,8 +58,8 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
         });
       } else {
         await apiRequest("POST", "/api/favorite-recipes", {
-          recipe_name: meal.name,
-          recipe_data: {
+          recipeName: meal.name,
+          recipeData: {
             ingredients_available: meal.ingredients_available,
             ingredients_needed: meal.ingredients_needed,
             recipe: meal.recipe,

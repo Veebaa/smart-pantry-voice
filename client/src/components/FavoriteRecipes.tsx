@@ -9,8 +9,8 @@ import { toast } from "@/hooks/use-toast";
 
 interface FavoriteRecipe {
   id: string;
-  recipe_name: string;
-  recipe_data: {
+  recipeName: string;
+  recipeData: {
     ingredients_available?: string[];
     ingredients_needed?: string[];
     recipe?: {
@@ -106,13 +106,13 @@ export const FavoriteRecipes = () => {
             <AccordionItem key={favorite.id} value={favorite.id}>
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex items-center justify-between w-full pr-4">
-                  <span className="text-lg font-semibold">{favorite.recipe_name}</span>
+                  <span className="text-lg font-semibold">{favorite.recipeName}</span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleRemoveFavorite(favorite.id, favorite.recipe_name);
+                      handleRemoveFavorite(favorite.id, favorite.recipeName);
                     }}
                   >
                     <Heart className="h-4 w-4 fill-current" />
@@ -121,11 +121,11 @@ export const FavoriteRecipes = () => {
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-4">
-                  {favorite.recipe_data.ingredients_available && favorite.recipe_data.ingredients_available.length > 0 && (
+                  {favorite.recipeData.ingredients_available && favorite.recipeData.ingredients_available.length > 0 && (
                     <div>
                       <p className="font-medium mb-2">You have:</p>
                       <div className="flex flex-wrap gap-2">
-                        {favorite.recipe_data.ingredients_available.map((ingredient, idx) => (
+                        {favorite.recipeData.ingredients_available.map((ingredient, idx) => (
                           <Badge key={idx} variant="secondary" className="gap-1">
                             <Check className="h-3 w-3" />
                             {ingredient}
@@ -135,11 +135,11 @@ export const FavoriteRecipes = () => {
                     </div>
                   )}
 
-                  {favorite.recipe_data.ingredients_needed && favorite.recipe_data.ingredients_needed.length > 0 && (
+                  {favorite.recipeData.ingredients_needed && favorite.recipeData.ingredients_needed.length > 0 && (
                     <div>
                       <p className="font-medium mb-2">You'll need:</p>
                       <div className="flex flex-wrap gap-2">
-                        {favorite.recipe_data.ingredients_needed.map((ingredient, idx) => (
+                        {favorite.recipeData.ingredients_needed.map((ingredient, idx) => (
                           <Badge key={idx} variant="outline" className="gap-1">
                             <ShoppingCart className="h-3 w-3" />
                             {ingredient}
@@ -149,39 +149,39 @@ export const FavoriteRecipes = () => {
                     </div>
                   )}
 
-                  {favorite.recipe_data.recipe && (
+                  {favorite.recipeData.recipe && (
                     <div className="space-y-4 pt-4 border-t">
                       <div className="flex items-center gap-2 text-primary">
                         <CookingPot className="h-5 w-5" />
                         <h4 className="font-semibold">Full Recipe</h4>
                       </div>
 
-                      {favorite.recipe_data.recipe.ingredients_with_quantities && (
+                      {favorite.recipeData.recipe.ingredients_with_quantities && (
                         <div>
                           <p className="font-medium mb-2">Ingredients:</p>
                           <ul className="list-disc list-inside space-y-1">
-                            {favorite.recipe_data.recipe.ingredients_with_quantities.map((ingredient, idx) => (
+                            {favorite.recipeData.recipe.ingredients_with_quantities.map((ingredient, idx) => (
                               <li key={idx} className="text-sm">{ingredient}</li>
                             ))}
                           </ul>
                         </div>
                       )}
 
-                      {favorite.recipe_data.recipe.cooking_steps && (
+                      {favorite.recipeData.recipe.cooking_steps && (
                         <div>
                           <p className="font-medium mb-2">Method:</p>
                           <ol className="list-decimal list-inside space-y-2">
-                            {favorite.recipe_data.recipe.cooking_steps.map((step, idx) => (
+                            {favorite.recipeData.recipe.cooking_steps.map((step, idx) => (
                               <li key={idx} className="text-sm">{step}</li>
                             ))}
                           </ol>
                         </div>
                       )}
 
-                      {favorite.recipe_data.recipe.tips && (
+                      {favorite.recipeData.recipe.tips && (
                         <div className="bg-muted p-3 rounded-md">
                           <p className="font-medium mb-1">Chef's Tip:</p>
-                          <p className="text-sm italic">{favorite.recipe_data.recipe.tips}</p>
+                          <p className="text-sm italic">{favorite.recipeData.recipe.tips}</p>
                         </div>
                       )}
                     </div>
