@@ -9,6 +9,10 @@ interface ClassificationResult {
 
 const MULTI_WORD_ITEMS: Record<string, StorageCategory> = {
   'ice cream': 'freezer',
+  'ice-cream': 'freezer',
+  'icecream': 'freezer',
+  'corn flakes': 'cupboard',
+  'cornflakes': 'cupboard',
   'frozen peas': 'freezer',
   'frozen chips': 'freezer',
   'frozen vegetables': 'freezer',

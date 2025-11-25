@@ -457,35 +457,45 @@ Your job is to interpret the user's speech text, determine their intent, and ret
 
 ${smartCategorizationRules}
 
-RULES FOR ADDING ITEMS:
-1. ADDING ITEMS TO PANTRY: When user wants to add an item to their pantry:
-   - FIRST, apply the SMART ITEM CATEGORIZATION RULES above
-   - If the item can be auto-classified (has keywords like "frozen", "tinned", "fresh", OR is a known item), set action="add_item" with the correct category - DO NOT ASK
-   - ONLY if the item is genuinely ambiguous (like "fish", "peas", "bread" without modifiers), set action="ask" with pending_item and ask ONLY about the relevant storage options
-   - Example auto-classify: "add cheese" → action="add_item", category="fridge" (known dairy)
-   - Example auto-classify: "add frozen peas" → action="add_item", category="freezer" (keyword: frozen)
-   - Example ambiguous: "add fish" → action="ask", pending_item="fish", speak: "You said fish. Should that go in the fridge or freezer?"
+CRITICAL COMMAND INTERPRETATION:
+- "add X" or "I have X" or "got X" = ADD TO PANTRY (action="add_item")
+- "add X to shopping list" or "add X to the list" or "I need to buy X" = ADD TO SHOPPING LIST (action="add_to_shopping_list")
+- "suggest meals" or "what can I cook" = SUGGEST MEALS (action="suggest_meals")
 
-2. If a pending item exists and userAnswer includes a storage category, set action="add_item", add item with that category, speak confirmation.
+RULES FOR ADDING ITEMS:
+1. ADDING TO PANTRY (DEFAULT FOR "add X"): When user says "add X", "I have X", "got X", "put X in the pantry":
+   - This means add to PANTRY INVENTORY, NOT shopping list
+   - FIRST, apply the SMART ITEM CATEGORIZATION RULES above
+   - If the item can be auto-classified (has keywords like "frozen", "tinned", "fresh", OR is a known item like cheese, milk, ice cream, corn flakes, pasta), set action="add_item" with the correct category - DO NOT ASK
+   - ONLY if the item is genuinely ambiguous (like "fish", "peas", "bread" without modifiers), set action="ask" with pending_item
+   - EXAMPLES:
+     * "add cheese" → action="add_item", category="fridge" 
+     * "add ice cream" or "add ice-cream" → action="add_item", category="freezer"
+     * "add corn flakes" → action="add_item", category="cupboard"
+     * "add frozen peas" → action="add_item", category="freezer"
+     * "add fish" → action="ask", pending_item="fish" (ambiguous without modifier)
+
+2. If a pending item exists and userAnswer includes a storage category, set action="add_item", add item with that category.
+
 3. If user says "skip", "cancel", "never mind", respond with action="none".
-4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
-5. RUNNING LOW COMMAND: If user says "running low on X", "low on X", "almost out of X", or "need more X":
-   - FIRST check if the item already exists in pantry inventory below
-   - If item EXISTS: set action="update_item" with payload.items array containing the item with is_low=true. Example: {"action":"update_item","payload":{"items":[{"name":"milk","is_low":true}]},"speak":"I've marked milk as running low and added it to your shopping list."}
-   - If item DOES NOT EXIST: set action="add_to_shopping_list" with the item name. Example: {"action":"add_to_shopping_list","payload":{"items":[{"name":"milk"}]},"speak":"I've added milk to your shopping list."}
-6. ADD TO SHOPPING LIST COMMAND: If user says "add X to shopping list", "put X on the list", "I need to buy X", or similar:
+
+4. MEAL SUGGESTIONS: If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
+
+5. RUNNING LOW: If user says "running low on X", "low on X", "almost out of X", or "need more X":
+   - If item EXISTS in pantry: action="update_item" with is_low=true
+   - If item NOT in pantry: action="add_to_shopping_list"
+
+6. ADD TO SHOPPING LIST ONLY: If user EXPLICITLY says "add X to shopping list", "add X to the list", "I need to buy X", "put X on my shopping list":
    - Set action="add_to_shopping_list"
-   - Include payload.items array with the item name
-   - Do NOT ask for category - this goes directly to shopping list, not pantry
-   - Example: {"action":"add_to_shopping_list","payload":{"items":[{"name":"noodles"}]},"speak":"I've added noodles to your shopping list."}
-7. SHOPPING LIST COMMAND: If user asks "what do I need", "create shopping list", "what should I buy", "shopping list", or similar:
+   - This is DIFFERENT from "add X" which adds to pantry
+
+7. GENERATE SHOPPING LIST: If user asks "what do I need", "create shopping list", "what should I buy":
    - Set action="generate_shopping_list"
-   - Include payload.shopping_list array with items that are running low
    - The low stock items are: ${lowStockItems.map(i => i.name).join(", ") || "none currently"}
-   - Speak a summary like "Here's your shopping list with X items that are running low"
+
 8. Otherwise, handle normal commands.
 
-CRITICAL REMINDER: Do NOT ask "fridge, freezer, or cupboard?" for obvious items like cheese, milk, pasta, rice, frozen peas, tinned beans, etc. Only ask for genuinely ambiguous items.
+CRITICAL: "add X" means add to PANTRY. Only "add X to shopping list" means shopping list. Do NOT confuse these.
 
 When suggesting meals:
 - Use action="suggest_meals" 
