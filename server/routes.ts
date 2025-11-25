@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "./db";
-import { pantryItems, userSettings, favoriteRecipes, users, sessions, insertPantryItemSchema, insertUserSettingsSchema, insertFavoriteRecipeSchema } from "@db/schema";
+import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, insertPantryItemSchema, insertUserSettingsSchema, insertFavoriteRecipeSchema, insertShoppingListItemSchema } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth";
 import { z } from "zod";
@@ -221,25 +221,40 @@ router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
   try {
     const { recipeName, recipeData } = req.body;
     
-    // Ensure recipeData has proper structure with defaults
+    if (!recipeName) {
+      return res.status(400).json({ error: "Recipe name is required" });
+    }
+    
+    // Ensure recipeData has proper structure with defaults - handle all possible undefined cases
+    const safeRecipeData = recipeData || {};
+    const safeRecipe = safeRecipeData.recipe || {};
+    
     const sanitizedRecipeData = {
-      ingredients_available: recipeData?.ingredients_available || [],
-      ingredients_needed: recipeData?.ingredients_needed || [],
-      recipe: recipeData?.recipe ? {
-        ingredients_with_quantities: recipeData.recipe.ingredients_with_quantities || [],
-        cooking_steps: recipeData.recipe.cooking_steps || [],
-        tips: recipeData.recipe.tips || ""
-      } : null
+      ingredients_available: Array.isArray(safeRecipeData.ingredients_available) 
+        ? safeRecipeData.ingredients_available.filter((i: any) => i != null) 
+        : [],
+      ingredients_needed: Array.isArray(safeRecipeData.ingredients_needed) 
+        ? safeRecipeData.ingredients_needed.filter((i: any) => i != null) 
+        : [],
+      recipe: {
+        ingredients_with_quantities: Array.isArray(safeRecipe.ingredients_with_quantities) 
+          ? safeRecipe.ingredients_with_quantities.filter((i: any) => i != null) 
+          : [],
+        cooking_steps: Array.isArray(safeRecipe.cooking_steps) 
+          ? safeRecipe.cooking_steps.filter((s: any) => s != null) 
+          : [],
+        tips: typeof safeRecipe.tips === 'string' ? safeRecipe.tips : ""
+      }
     };
     
-    const validatedData = insertFavoriteRecipeSchema.parse({ 
+    const [recipe] = await db.insert(favoriteRecipes).values({
       recipeName,
       recipeData: sanitizedRecipeData,
       userId: req.user!.id 
-    });
-    const [recipe] = await db.insert(favoriteRecipes).values(validatedData).returning();
+    }).returning();
     res.json(recipe);
   } catch (error: any) {
+    console.error("Error saving favorite recipe:", error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
@@ -252,6 +267,71 @@ router.delete("/api/favorite-recipes/:id", requireAuth, async (req, res) => {
     const { id } = req.params;
     await db.delete(favoriteRecipes)
       .where(and(eq(favoriteRecipes.id, id), eq(favoriteRecipes.userId, req.user!.id)));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Shopping List routes (for items to buy, separate from pantry)
+router.get("/api/shopping-list", requireAuth, async (req, res) => {
+  try {
+    const items = await db.select().from(shoppingListItems)
+      .where(eq(shoppingListItems.userId, req.user!.id))
+      .orderBy(desc(shoppingListItems.createdAt));
+    res.json(items);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/api/shopping-list", requireAuth, async (req, res) => {
+  try {
+    const { name, quantity } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: "Item name is required" });
+    }
+    
+    const [item] = await db.insert(shoppingListItems).values({
+      userId: req.user!.id,
+      name,
+      quantity: quantity || null,
+      checked: false,
+    }).returning();
+    
+    res.json(item);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch("/api/shopping-list/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { checked, name, quantity } = req.body;
+    
+    const updateData: any = {};
+    if (checked !== undefined) updateData.checked = checked;
+    if (name !== undefined) updateData.name = name;
+    if (quantity !== undefined) updateData.quantity = quantity;
+    
+    const [item] = await db.update(shoppingListItems)
+      .set(updateData)
+      .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)))
+      .returning();
+    
+    res.json(item);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(shoppingListItems)
+      .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -355,14 +435,19 @@ RULES:
 4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
 5. RUNNING LOW COMMAND: If user says "running low on X", "low on X", "almost out of X", or "need more X":
    - FIRST check if the item already exists in pantry inventory below
-   - If item EXISTS: set action="update_item" with payload.items array containing the item with is_low=true. Example: {"action":"update_item","payload":{"items":[{"name":"milk","is_low":true}]},"speak":"I've marked milk as running low."}
-   - If item DOES NOT EXIST: set action="add_item" with is_low=true and ask for category
-6. SHOPPING LIST COMMAND: If user asks "what do I need", "create shopping list", "what should I buy", "shopping list", or similar:
+   - If item EXISTS: set action="update_item" with payload.items array containing the item with is_low=true. Example: {"action":"update_item","payload":{"items":[{"name":"milk","is_low":true}]},"speak":"I've marked milk as running low and added it to your shopping list."}
+   - If item DOES NOT EXIST: set action="add_to_shopping_list" with the item name. Example: {"action":"add_to_shopping_list","payload":{"items":[{"name":"milk"}]},"speak":"I've added milk to your shopping list."}
+6. ADD TO SHOPPING LIST COMMAND: If user says "add X to shopping list", "put X on the list", "I need to buy X", or similar:
+   - Set action="add_to_shopping_list"
+   - Include payload.items array with the item name
+   - Do NOT ask for category - this goes directly to shopping list, not pantry
+   - Example: {"action":"add_to_shopping_list","payload":{"items":[{"name":"noodles"}]},"speak":"I've added noodles to your shopping list."}
+7. SHOPPING LIST COMMAND: If user asks "what do I need", "create shopping list", "what should I buy", "shopping list", or similar:
    - Set action="generate_shopping_list"
    - Include payload.shopping_list array with items that are running low
    - The low stock items are: ${lowStockItems.map(i => i.name).join(", ") || "none currently"}
    - Speak a summary like "Here's your shopping list with X items that are running low"
-7. Otherwise, handle normal commands.
+8. Otherwise, handle normal commands.
 
 When suggesting meals:
 - Use action="suggest_meals" 
@@ -392,7 +477,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           parameters: {
             type: "object",
             properties: {
-              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals", "generate_shopping_list"] },
+              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals", "generate_shopping_list", "add_to_shopping_list"] },
               payload: {
                 type: "object",
                 properties: {
@@ -555,6 +640,20 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
             })
             .where(eq(pantryItems.id, matchingItem.id));
         }
+      }
+    }
+
+    // Handle add_to_shopping_list in DB (add items directly to shopping list, not pantry)
+    if (sageResponse.action === "add_to_shopping_list" && sageResponse.payload?.items) {
+      for (const item of sageResponse.payload.items) {
+        if (!item.name) continue;
+
+        await db.insert(shoppingListItems).values({
+          userId: req.user!.id,
+          name: item.name,
+          quantity: item.quantity || null,
+          checked: false,
+        });
       }
     }
 

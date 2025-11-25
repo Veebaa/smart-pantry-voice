@@ -28,7 +28,7 @@ interface PantryItem {
 }
 
 interface SageResponse {
-  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals" | "generate_shopping_list";
+  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals" | "generate_shopping_list" | "add_to_shopping_list";
   meal_suggestions?: any[];
   pending_item?: string;
   payload?: {
@@ -40,9 +40,17 @@ interface SageResponse {
   speak: string;
 }
 
+interface ShoppingListItem {
+  id: string;
+  name: string;
+  quantity?: string | null;
+  checked: boolean;
+}
+
 const Index = () => {
   const { user, loading, logout } = useUser();
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [shoppingListItems, setShoppingListItems] = useState<ShoppingListItem[]>([]);
   const [sageResponse, setSageResponse] = useState<SageResponse | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastItem, setLastItem] = useState<string | null>(null);
@@ -62,9 +70,11 @@ const Index = () => {
   useEffect(() => {
     if (user) {
       fetchPantryItems();
+      fetchShoppingListItems();
       
       const interval = setInterval(() => {
         fetchPantryItems();
+        fetchShoppingListItems();
       }, 5000);
 
       return () => clearInterval(interval);
@@ -108,6 +118,17 @@ const Index = () => {
       return data || [];
     } catch (error: any) {
       toast.error(error.message);
+      return [];
+    }
+  };
+
+  const fetchShoppingListItems = async () => {
+    try {
+      const data = await apiRequest("GET", "/api/shopping-list");
+      setShoppingListItems(data || []);
+      return data || [];
+    } catch (error: any) {
+      console.error("Error fetching shopping list:", error.message);
       return [];
     }
   };
@@ -259,6 +280,48 @@ const Index = () => {
         return;
       }
 
+      // Handle add_to_shopping_list action
+      if (data.action === "add_to_shopping_list") {
+        toast.success("Added to shopping list!");
+        setSageResponse(data);
+        if (data.speak) {
+          speak(data.speak, {
+            onend: async () => {
+              await fetchShoppingListItems();
+              const voiceInputEl = document.getElementById("voice-input-button");
+              setTimeout(() => {
+                if (voiceInputEl && !isSpeaking) voiceInputEl.click();
+              }, 250);
+            },
+          });
+        } else {
+          await fetchShoppingListItems();
+        }
+        return;
+      }
+
+      // Handle update_item action (for low stock updates)
+      if (data.action === "update_item") {
+        toast.success("Item updated!");
+        setSageResponse(data);
+        if (data.speak) {
+          speak(data.speak, {
+            onend: async () => {
+              await fetchPantryItems();
+              await fetchShoppingListItems();
+              const voiceInputEl = document.getElementById("voice-input-button");
+              setTimeout(() => {
+                if (voiceInputEl && !isSpeaking) voiceInputEl.click();
+              }, 250);
+            },
+          });
+        } else {
+          await fetchPantryItems();
+          await fetchShoppingListItems();
+        }
+        return;
+      }
+
       setSageResponse(data);
 
       if (data.speak) {
@@ -267,6 +330,7 @@ const Index = () => {
             console.log("Fetching pantry items (after API response)...");
             const items = await fetchPantryItems();
             console.log("Current pantry:", items);
+            await fetchShoppingListItems();
 
             const voiceInputEl = document.getElementById("voice-input-button");
 
@@ -279,6 +343,7 @@ const Index = () => {
         console.log("Fetching pantry items (after API response - no speak)...");
         const items = await fetchPantryItems();
         console.log("Current pantry:", items);
+        await fetchShoppingListItems();
         const voiceInputEl = document.getElementById("voice-input-button");
         if (voiceInputEl && !isSpeaking) voiceInputEl.click();
       }
@@ -466,20 +531,25 @@ const Index = () => {
 
           <TabsContent value="shopping">
             {(() => {
-              // Combine AI-generated shopping list with low stock items
-              const aiShoppingList = sageResponse?.payload?.shopping_list || [];
+              // Combine: low stock items from pantry + items added directly to shopping list + AI suggestions
               const lowStockNames = lowStockItems.map(item => item.name);
+              const dbShoppingNames = shoppingListItems.filter(i => !i.checked).map(item => item.name);
+              const aiShoppingList = sageResponse?.payload?.shopping_list || [];
               // Merge and deduplicate
-              const combinedList = [...new Set([...lowStockNames, ...aiShoppingList])];
+              const combinedList = [...new Set([...lowStockNames, ...dbShoppingNames, ...aiShoppingList])];
               
               return combinedList.length > 0 ? (
-                <ShoppingList items={combinedList} />
+                <ShoppingList 
+                  items={combinedList} 
+                  shoppingListItems={shoppingListItems}
+                  onRefresh={fetchShoppingListItems}
+                />
               ) : (
                 <Card>
                   <CardContent className="pt-6 text-center text-muted-foreground">
                     <p>Your shopping list will appear here</p>
                     <p className="text-sm mt-2">Items marked as "running low" will automatically appear here.</p>
-                    <p className="text-sm">Try saying: "Running low on milk" or "What do I need?"</p>
+                    <p className="text-sm">Try saying: "Add noodles to shopping list" or "Running low on milk"</p>
                   </CardContent>
                 </Card>
               );
