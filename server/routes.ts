@@ -651,16 +651,30 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       };
     }
 
-    // Normalize add_item response - AI sometimes returns flat {name, category} instead of {items: [...]}
+    // Normalize add_item response - AI sometimes returns incomplete formats
     if (sageResponse.action === "add_item" && sageResponse.payload) {
-      if (!sageResponse.payload.items && sageResponse.payload.name) {
-        // Convert flat format to items array
-        sageResponse.payload.items = [{
-          name: sageResponse.payload.name,
-          category: sageResponse.payload.category,
-          quantity: sageResponse.payload.quantity,
-          is_low: sageResponse.payload.is_low
-        }];
+      if (!sageResponse.payload.items) {
+        // Try to extract item name from various sources
+        let itemName = sageResponse.payload.name;
+        
+        // If no name in payload, try to extract from voice input
+        if (!itemName && voiceInput) {
+          // Extract item name from "add X" pattern
+          const addMatch = voiceInput.match(/^add\s+(.+)$/i);
+          if (addMatch) {
+            itemName = addMatch[1].trim();
+          }
+        }
+        
+        // If we have a name (from payload or extracted), create items array
+        if (itemName) {
+          sageResponse.payload.items = [{
+            name: itemName,
+            category: sageResponse.payload.category,
+            quantity: sageResponse.payload.quantity,
+            is_low: sageResponse.payload.is_low
+          }];
+        }
       }
     }
 
