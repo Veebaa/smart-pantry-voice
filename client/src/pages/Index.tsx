@@ -28,7 +28,7 @@ interface PantryItem {
 }
 
 interface SageResponse {
-  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals";
+  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals" | "generate_shopping_list";
   meal_suggestions?: any[];
   pending_item?: string;
   payload?: {
@@ -227,6 +227,19 @@ const Index = () => {
         console.log("Item added, clearing pending item:", lastItem);
         setLastItem(null);
         toast.success("Pantry updated!");
+      }
+
+      if (data.action === "update_item") {
+        console.log("Item updated (marked as low stock):", data.payload);
+        setLastItem(null);
+        toast.success("Item marked as running low!");
+        // Refresh pantry items to show updated status
+        await fetchPantryItems();
+      }
+
+      if (data.action === "generate_shopping_list") {
+        console.log("Shopping list generated:", data.payload?.shopping_list);
+        toast.success("Shopping list ready!");
       }
 
       if (data.action === "none") {
@@ -452,16 +465,25 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="shopping">
-            {sageResponse?.payload?.shopping_list && sageResponse.payload.shopping_list.length > 0 ? (
-              <ShoppingList items={sageResponse.payload.shopping_list} />
-            ) : (
-              <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
-                  <p>Your shopping list will appear here</p>
-                  <p className="text-sm mt-2">Try saying: "Create shopping list" or "What do I need?"</p>
-                </CardContent>
-              </Card>
-            )}
+            {(() => {
+              // Combine AI-generated shopping list with low stock items
+              const aiShoppingList = sageResponse?.payload?.shopping_list || [];
+              const lowStockNames = lowStockItems.map(item => item.name);
+              // Merge and deduplicate
+              const combinedList = [...new Set([...lowStockNames, ...aiShoppingList])];
+              
+              return combinedList.length > 0 ? (
+                <ShoppingList items={combinedList} />
+              ) : (
+                <Card>
+                  <CardContent className="pt-6 text-center text-muted-foreground">
+                    <p>Your shopping list will appear here</p>
+                    <p className="text-sm mt-2">Items marked as "running low" will automatically appear here.</p>
+                    <p className="text-sm">Try saying: "Running low on milk" or "What do I need?"</p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </div>

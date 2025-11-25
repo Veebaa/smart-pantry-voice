@@ -219,7 +219,24 @@ router.get("/api/favorite-recipes", requireAuth, async (req, res) => {
 
 router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
   try {
-    const validatedData = insertFavoriteRecipeSchema.parse({ ...req.body, userId: req.user!.id });
+    const { recipeName, recipeData } = req.body;
+    
+    // Ensure recipeData has proper structure with defaults
+    const sanitizedRecipeData = {
+      ingredients_available: recipeData?.ingredients_available || [],
+      ingredients_needed: recipeData?.ingredients_needed || [],
+      recipe: recipeData?.recipe ? {
+        ingredients_with_quantities: recipeData.recipe.ingredients_with_quantities || [],
+        cooking_steps: recipeData.recipe.cooking_steps || [],
+        tips: recipeData.recipe.tips || ""
+      } : null
+    };
+    
+    const validatedData = insertFavoriteRecipeSchema.parse({ 
+      recipeName,
+      recipeData: sanitizedRecipeData,
+      userId: req.user!.id 
+    });
     const [recipe] = await db.insert(favoriteRecipes).values(validatedData).returning();
     res.json(recipe);
   } catch (error: any) {
@@ -322,6 +339,12 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
       return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
     }
 
+    // Get low stock items for shopping list
+    const lowStockItems = currentPantryItems.filter(item => 
+      item.isLow || (item.currentQuantity != null && item.lowStockThreshold != null && 
+        Number(item.currentQuantity) <= Number(item.lowStockThreshold))
+    );
+
     const systemPrompt = `You are Sage, the kitchen assistant.
 Your job is to interpret the user's speech text, determine their intent, and return a JSON action.
 
@@ -330,8 +353,16 @@ RULES:
 2. If a pending item exists and userAnswer includes a storage category, extract category, set action="add_item", add item, speak confirmation, clear pending item.
 3. If user says "skip", "cancel", "never mind", respond with action="none".
 4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
-5. If user says they are "running low on X", "low on X", "almost out of X", or "need more X" - this is a LOW STOCK notification. If the item already exists in pantry, set action="update_item" with is_low=true. If item doesn't exist, set action="add_item" with is_low=true and ask for storage category.
-6. Otherwise, handle normal commands.
+5. RUNNING LOW COMMAND: If user says "running low on X", "low on X", "almost out of X", or "need more X":
+   - FIRST check if the item already exists in pantry inventory below
+   - If item EXISTS: set action="update_item" with payload.items array containing the item with is_low=true. Example: {"action":"update_item","payload":{"items":[{"name":"milk","is_low":true}]},"speak":"I've marked milk as running low."}
+   - If item DOES NOT EXIST: set action="add_item" with is_low=true and ask for category
+6. SHOPPING LIST COMMAND: If user asks "what do I need", "create shopping list", "what should I buy", "shopping list", or similar:
+   - Set action="generate_shopping_list"
+   - Include payload.shopping_list array with items that are running low
+   - The low stock items are: ${lowStockItems.map(i => i.name).join(", ") || "none currently"}
+   - Speak a summary like "Here's your shopping list with X items that are running low"
+7. Otherwise, handle normal commands.
 
 When suggesting meals:
 - Use action="suggest_meals" 
@@ -341,6 +372,9 @@ When suggesting meals:
 
 Current pantry inventory:
 ${JSON.stringify(currentPantryItems, null, 2)}
+
+Items currently marked as low stock:
+${lowStockItems.length > 0 ? lowStockItems.map(i => `- ${i.name}`).join("\n") : "None"}
 
 ${lastItem ? `PENDING ITEM WAITING FOR CATEGORY: "${lastItem}"` : ''}
 
@@ -358,7 +392,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           parameters: {
             type: "object",
             properties: {
-              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals"] },
+              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals", "generate_shopping_list"] },
               payload: {
                 type: "object",
                 properties: {
@@ -375,6 +409,11 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
                     }
                   },
                   pending_item: { type: "string" },
+                  shopping_list: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "List of items to buy (low stock items)"
+                  },
                   meal_suggestions: {
                     type: "array",
                     items: {
