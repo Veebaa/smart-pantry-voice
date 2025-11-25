@@ -26,6 +26,7 @@ export const RecipeHistory = () => {
 
   const { data: history = [], isLoading } = useQuery<RecipeHistoryEntry[]>({
     queryKey: ["/api/recipe-history"],
+    queryFn: () => apiRequest("GET", "/api/recipe-history"),
   });
 
   const updateMutation = useMutation({
