@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "./db.js";
-import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "@db/schema";
+import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "../shared/schema.js";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth.js";
 import { z } from "zod";
