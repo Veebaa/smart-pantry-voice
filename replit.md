@@ -118,6 +118,7 @@ The following API keys are needed for full functionality:
 - ✅ Added undo functionality for pantry operations
 - ✅ Built recipe history feature with ratings and notes
 - ✅ Added "Suggest Meals" button for click-based meal suggestions (alternative to voice)
+- ✅ Added "Cook This" button to save selected recipes to history tab
 
 ## Next Steps
 1. Request API keys from user (LOVABLE_API_KEY, OPENAI_API_KEY)

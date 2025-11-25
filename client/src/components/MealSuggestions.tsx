@@ -3,10 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ChefHat, Check, ShoppingCart, CookingPot, Heart } from "lucide-react";
+import { ChefHat, Check, ShoppingCart, CookingPot, Heart, Utensils, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { sanitizeText } from "@/lib/validation";
 
 interface MealSuggestion {
   name: string;
@@ -25,6 +24,7 @@ interface MealSuggestionsProps {
 
 export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [cookingRecipe, setCookingRecipe] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFavorites();
@@ -36,6 +36,34 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
       setFavorites(data?.map((f: any) => f.recipeName) || []);
     } catch (error) {
       console.error("Error fetching favorites:", error);
+    }
+  };
+
+  const handleCookThis = async (meal: MealSuggestion) => {
+    setCookingRecipe(meal.name);
+    try {
+      await apiRequest("POST", "/api/recipe-history", {
+        recipeName: meal.name,
+        recipeData: {
+          ingredients_available: meal.ingredients_available || [],
+          ingredients_needed: meal.ingredients_needed || [],
+          recipe: meal.recipe || null,
+        },
+      });
+      
+      toast({
+        title: "Recipe added to history",
+        description: `${meal.name} has been added to your cooking history. Enjoy your meal!`,
+      });
+    } catch (error) {
+      console.error("Error adding to history:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add recipe to history",
+        variant: "destructive",
+      });
+    } finally {
+      setCookingRecipe(null);
     }
   };
 
@@ -104,20 +132,39 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
                     <CookingPot className="h-5 w-5 text-primary flex-shrink-0" />
                     <h3 className="text-lg font-semibold text-primary">{meal.name}</h3>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleFavorite(meal);
-                    }}
-                  >
-                    <Heart
-                      className={`h-4 w-4 ${
-                        favorites.includes(meal.name) ? "fill-current" : ""
-                      }`}
-                    />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCookThis(meal);
+                      }}
+                      disabled={cookingRecipe === meal.name}
+                      data-testid={`button-cook-${index}`}
+                    >
+                      {cookingRecipe === meal.name ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Utensils className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(meal);
+                      }}
+                      data-testid={`button-favorite-${index}`}
+                    >
+                      <Heart
+                        className={`h-4 w-4 ${
+                          favorites.includes(meal.name) ? "fill-current" : ""
+                        }`}
+                      />
+                    </Button>
+                  </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
@@ -194,6 +241,22 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
                     )}
                   </div>
                 )}
+                
+                <div className="pt-4 border-t mt-4">
+                  <Button
+                    onClick={() => handleCookThis(meal)}
+                    disabled={cookingRecipe === meal.name}
+                    className="w-full"
+                    data-testid={`button-cook-full-${index}`}
+                  >
+                    {cookingRecipe === meal.name ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Utensils className="h-4 w-4 mr-2" />
+                    )}
+                    {cookingRecipe === meal.name ? "Adding to History..." : "I'm Cooking This!"}
+                  </Button>
+                </div>
               </AccordionContent>
             </AccordionItem>
           ))}
