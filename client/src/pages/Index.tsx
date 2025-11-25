@@ -22,9 +22,9 @@ interface PantryItem {
   name: string;
   category: string;
   quantity?: string;
-  is_low: boolean;
-  current_quantity?: number | null;
-  low_stock_threshold?: number | null;
+  isLow: boolean;
+  currentQuantity?: number | null;
+  lowStockThreshold?: number | null;
 }
 
 interface SageResponse {
@@ -146,7 +146,7 @@ const Index = () => {
             name: autoAddItem,
             category: category,
             quantity: "unknown",
-            is_low: false,
+            isLow: false,
           });
         } catch (insertError: any) {
           console.error("Error inserting auto-added item:", insertError.message);
@@ -157,7 +157,7 @@ const Index = () => {
           action: "add_item",
           payload: {
             items: [
-              { name: autoAddItem, category, quantity: "unknown", is_low: false },
+              { name: autoAddItem, category, quantity: "unknown", isLow: false },
             ],
           },
           speak: `Added ${autoAddItem} to the ${category}.`,
@@ -312,7 +312,7 @@ const Index = () => {
     return <Landing />;
   }
 
-  const lowStockItems = pantryItems.filter((item) => item.is_low);
+  const lowStockItems = pantryItems.filter((item) => item.isLow);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">

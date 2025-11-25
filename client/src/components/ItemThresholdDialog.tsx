@@ -38,11 +38,11 @@ export const ItemThresholdDialog = ({
     setSaving(true);
     try {
       const updateData: {
-        current_quantity: number | null;
-        low_stock_threshold: number | null;
+        currentQuantity: number | null;
+        lowStockThreshold: number | null;
       } = {
-        current_quantity: quantity.trim() !== "" ? parseFloat(quantity) : null,
-        low_stock_threshold: lowThreshold.trim() !== "" ? parseFloat(lowThreshold) : null,
+        currentQuantity: quantity.trim() !== "" ? parseFloat(quantity) : null,
+        lowStockThreshold: lowThreshold.trim() !== "" ? parseFloat(lowThreshold) : null,
       };
 
       console.log("Saving item data:", updateData);

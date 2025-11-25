@@ -330,7 +330,8 @@ RULES:
 2. If a pending item exists and userAnswer includes a storage category, extract category, set action="add_item", add item, speak confirmation, clear pending item.
 3. If user says "skip", "cancel", "never mind", respond with action="none".
 4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
-5. Otherwise, handle normal commands.
+5. If user says they are "running low on X", "low on X", "almost out of X", or "need more X" - this is a LOW STOCK notification. If the item already exists in pantry, set action="update_item" with is_low=true. If item doesn't exist, set action="add_item" with is_low=true and ask for storage category.
+6. Otherwise, handle normal commands.
 
 When suggesting meals:
 - Use action="suggest_meals" 
@@ -490,6 +491,31 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           quantity: item.quantity || null,
           isLow: item.is_low || false,
         });
+      }
+    }
+
+    // Handle update_item in DB (for low stock updates)
+    if (sageResponse.action === "update_item" && sageResponse.payload?.items) {
+      for (const item of sageResponse.payload.items) {
+        if (!item.name) continue;
+
+        // Find existing item by name (case-insensitive)
+        const existingItems = await db.select().from(pantryItems)
+          .where(eq(pantryItems.userId, req.user!.id));
+        
+        const matchingItem = existingItems.find(
+          p => p.name.toLowerCase() === item.name.toLowerCase()
+        );
+        
+        if (matchingItem) {
+          await db.update(pantryItems)
+            .set({ 
+              isLow: item.is_low ?? matchingItem.isLow,
+              quantity: item.quantity || matchingItem.quantity,
+              updatedAt: new Date()
+            })
+            .where(eq(pantryItems.id, matchingItem.id));
+        }
       }
     }
 

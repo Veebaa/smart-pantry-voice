@@ -11,9 +11,9 @@ interface PantryItem {
   name: string;
   category: string;
   quantity?: string;
-  is_low: boolean;
-  current_quantity?: number | null;
-  low_stock_threshold?: number | null;
+  isLow: boolean;
+  currentQuantity?: number | null;
+  lowStockThreshold?: number | null;
 }
 
 interface PantryInventoryProps {
@@ -39,10 +39,10 @@ const categoryLabels = {
 export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryProps) => {
   const groupedItems = items.reduce((acc, item) => {
     // Coerce to float for safety
-    const currentQty = item.current_quantity != null ? parseFloat(String(item.current_quantity)) : null;
-    const lowThreshold = item.low_stock_threshold != null ? parseFloat(String(item.low_stock_threshold)) : null;
+    const currentQty = item.currentQuantity != null ? parseFloat(String(item.currentQuantity)) : null;
+    const lowThreshold = item.lowStockThreshold != null ? parseFloat(String(item.lowStockThreshold)) : null;
 
-    const normalizedItem = { ...item, current_quantity: currentQty, low_stock_threshold: lowThreshold };
+    const normalizedItem = { ...item, currentQuantity: currentQty, lowStockThreshold: lowThreshold };
 
     if (!acc[item.category]) acc[item.category] = [];
     acc[item.category].push(normalizedItem);
@@ -80,16 +80,16 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{item.name}</span>
-                    {item.current_quantity != null ? (
+                    {item.currentQuantity != null ? (
                       <span className="text-sm text-muted-foreground">
-                        Qty: {item.current_quantity.toFixed(2).replace(/\.00$/, "")}
-                        {item.low_stock_threshold != null &&
-                          ` / Alert at: ${item.low_stock_threshold.toFixed(2).replace(/\.00$/, "")}`}
+                        Qty: {item.currentQuantity.toFixed(2).replace(/\.00$/, "")}
+                        {item.lowStockThreshold != null &&
+                          ` / Alert at: ${item.lowStockThreshold.toFixed(2).replace(/\.00$/, "")}`}
                       </span>
                     ) : item.quantity ? (
                       <span className="text-sm text-muted-foreground">({item.quantity})</span>
                     ) : null}
-                    {item.is_low && (
+                    {item.isLow && (
                       <Badge variant="destructive" className="text-xs">
                         Running Low
                       </Badge>
@@ -99,8 +99,8 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                     <ItemThresholdDialog
                       itemId={item.id}
                       itemName={item.name}
-                      currentQuantity={item.current_quantity ?? null}
-                      threshold={item.low_stock_threshold ?? null}
+                      currentQuantity={item.currentQuantity ?? null}
+                      threshold={item.lowStockThreshold ?? null}
                       onUpdate={onUpdate}
                     />
                     <Button

@@ -60,9 +60,9 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
         await apiRequest("POST", "/api/favorite-recipes", {
           recipeName: meal.name,
           recipeData: {
-            ingredients_available: meal.ingredients_available,
-            ingredients_needed: meal.ingredients_needed,
-            recipe: meal.recipe,
+            ingredients_available: meal.ingredients_available || [],
+            ingredients_needed: meal.ingredients_needed || [],
+            recipe: meal.recipe || null,
           },
         });
 
