@@ -119,7 +119,7 @@ router.get("/api/pantry-items", requireAuth, async (req, res) => {
 router.post("/api/pantry-items", requireAuth, async (req, res) => {
   try {
     const validatedData = insertPantryItemSchema.parse({ ...req.body, userId: req.user!.id });
-    const [item] = await db.insert(pantryItems).values(validatedData).returning();
+    const [item] = await db.insert(pantryItems).values(validatedData as any).returning();
     res.json(item);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -196,11 +196,11 @@ router.post("/api/user-settings", requireAuth, async (req, res) => {
     let settings;
     if (existing) {
       [settings] = await db.update(userSettings)
-        .set({ ...validatedData, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() } as any)
         .where(eq(userSettings.userId, req.user!.id))
         .returning();
     } else {
-      [settings] = await db.insert(userSettings).values(validatedData).returning();
+      [settings] = await db.insert(userSettings).values(validatedData as any).returning();
     }
     
     res.json(settings);
@@ -324,9 +324,9 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
     const currentPantryItems = await db.select().from(pantryItems)
       .where(eq(pantryItems.userId, req.user!.id));
 
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-    if (!LOVABLE_API_KEY) {
-      return res.status(500).json({ error: "LOVABLE_API_KEY not configured" });
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
     }
 
     const systemPrompt = `You are Sage, the kitchen assistant.
@@ -385,14 +385,14 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       }
     ];
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: voiceInput || "Analyze my pantry and suggest meals" }
@@ -408,7 +408,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       return res.status(500).json({ error: `AI gateway error: ${response.status}` });
     }
 
-    const aiResponse = await response.json();
+    const aiResponse = await response.json() as any;
     const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) {
       return res.status(500).json({ error: "No tool call in AI response" });
