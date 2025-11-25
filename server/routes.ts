@@ -651,6 +651,19 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       };
     }
 
+    // Normalize add_item response - AI sometimes returns flat {name, category} instead of {items: [...]}
+    if (sageResponse.action === "add_item" && sageResponse.payload) {
+      if (!sageResponse.payload.items && sageResponse.payload.name) {
+        // Convert flat format to items array
+        sageResponse.payload.items = [{
+          name: sageResponse.payload.name,
+          category: sageResponse.payload.category,
+          quantity: sageResponse.payload.quantity,
+          is_low: sageResponse.payload.is_low
+        }];
+      }
+    }
+
     // Handle add_item in DB - apply smart classification, validate categories, prevent duplicates
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
       for (const item of sageResponse.payload.items) {
