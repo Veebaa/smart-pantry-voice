@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { authSchema } from "@/lib/validation";
 import { z } from "zod";
 
 export const Auth = () => {
+  const { login, signup } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
@@ -20,44 +21,16 @@ export const Auth = () => {
     setErrors({});
 
     try {
-      // Security: Validate input before sending to Supabase
       const validatedData = authSchema.parse({ email, password });
       
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ 
-          email: validatedData.email, 
-          password: validatedData.password 
-        });
-        if (error) {
-          // Security: Don't expose whether user exists or not
-          if (error.message.includes("Invalid") || error.message.includes("not found")) {
-            throw new Error("Invalid email or password");
-          }
-          throw error;
-        }
+        await login(validatedData.email, validatedData.password);
         toast.success("Welcome back!");
       } else {
-        // Security: REQUIRED - Set emailRedirectTo for proper auth flow
-        const redirectUrl = `${window.location.origin}/`;
-        
-        const { error } = await supabase.auth.signUp({ 
-          email: validatedData.email, 
-          password: validatedData.password,
-          options: {
-            emailRedirectTo: redirectUrl
-          }
-        });
-        if (error) {
-          // Security: Handle common signup errors gracefully
-          if (error.message.includes("already registered")) {
-            throw new Error("This email is already registered. Please sign in instead.");
-          }
-          throw error;
-        }
+        await signup(validatedData.email, validatedData.password);
         toast.success("Account created! Welcome to your pantry assistant.");
       }
     } catch (error: any) {
-      // Security: Handle validation errors separately
       if (error instanceof z.ZodError) {
         const fieldErrors: { email?: string; password?: string } = {};
         error.issues.forEach((err) => {
@@ -70,7 +43,7 @@ export const Auth = () => {
         setErrors(fieldErrors);
         toast.error("Please check your input and try again");
       } else {
-        toast.error(error.message);
+        toast.error(error.message || "Authentication failed. Please try again.");
       }
     } finally {
       setLoading(false);

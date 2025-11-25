@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 // Accent → OpenAI voice mapping (used for voiceId parameter)
@@ -26,14 +26,7 @@ export const useVoiceOutput = () => {
   /** Fetch user TTS language/accent settings */
   const getVoiceSettings = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { language: "en", accent: "en-US" };
-
-      const { data: settings } = await supabase
-        .from("user_settings")
-        .select("voice_language, voice_accent")
-        .eq("user_id", user.id)
-        .single();
+      const settings = await apiRequest("GET", "/api/user-settings");
 
       return {
         language: settings?.voice_language || "en",
@@ -67,12 +60,8 @@ export const useVoiceOutput = () => {
       const { accent, language } = await getVoiceSettings();
       const voiceId = OPENAI_VOICE_MAP[accent] || OPENAI_VOICE_MAP["en-US"];
 
-      // Call Supabase edge function instead of OpenAI directly
-      const { data, error } = await supabase.functions.invoke("openai-tts", {
-        body: { text, voiceId, language },
-      });
+      const data = await apiRequest("POST", "/api/openai-tts", { text, voiceId, language });
 
-      if (error) throw error;
       if (!data?.audioContent) throw new Error("No audio content received");
 
       const audioUrl = createAudioUrl(data.audioContent);

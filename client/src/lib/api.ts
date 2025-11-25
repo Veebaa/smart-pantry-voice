@@ -1,6 +1,29 @@
 const API_BASE_URL = "";
 
-async function apiRequest(endpoint: string, options: RequestInit = {}) {
+export async function apiRequest(method: string, endpoint: string, data?: any) {
+  const options: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  };
+
+  if (data) {
+    options.body = JSON.stringify(data);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
@@ -21,54 +44,54 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
 export const api = {
   auth: {
     signup: async (email: string, password: string) => {
-      return apiRequest("/api/auth/signup", {
+      return internalApiRequest("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
     },
     signin: async (email: string, password: string) => {
-      return apiRequest("/api/auth/signin", {
+      return internalApiRequest("/api/auth/signin", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
     },
     signout: async () => {
-      return apiRequest("/api/auth/signout", {
+      return internalApiRequest("/api/auth/signout", {
         method: "POST",
       });
     },
     getUser: async () => {
-      return apiRequest("/api/auth/user");
+      return internalApiRequest("/api/auth/user");
     },
   },
   pantryItems: {
     getAll: async () => {
-      return apiRequest("/api/pantry-items");
+      return internalApiRequest("/api/pantry-items");
     },
     create: async (item: any) => {
-      return apiRequest("/api/pantry-items", {
+      return internalApiRequest("/api/pantry-items", {
         method: "POST",
         body: JSON.stringify(item),
       });
     },
     update: async (id: string, data: any) => {
-      return apiRequest(`/api/pantry-items/${id}`, {
+      return internalApiRequest(`/api/pantry-items/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
       });
     },
     delete: async (id: string) => {
-      return apiRequest(`/api/pantry-items/${id}`, {
+      return internalApiRequest(`/api/pantry-items/${id}`, {
         method: "DELETE",
       });
     },
   },
   userSettings: {
     get: async () => {
-      return apiRequest("/api/user-settings");
+      return internalApiRequest("/api/user-settings");
     },
     upsert: async (settings: any) => {
-      return apiRequest("/api/user-settings", {
+      return internalApiRequest("/api/user-settings", {
         method: "POST",
         body: JSON.stringify(settings),
       });
@@ -76,28 +99,28 @@ export const api = {
   },
   favoriteRecipes: {
     getAll: async () => {
-      return apiRequest("/api/favorite-recipes");
+      return internalApiRequest("/api/favorite-recipes");
     },
     create: async (recipe: any) => {
-      return apiRequest("/api/favorite-recipes", {
+      return internalApiRequest("/api/favorite-recipes", {
         method: "POST",
         body: JSON.stringify(recipe),
       });
     },
     delete: async (id: string) => {
-      return apiRequest(`/api/favorite-recipes/${id}`, {
+      return internalApiRequest(`/api/favorite-recipes/${id}`, {
         method: "DELETE",
       });
     },
   },
   pantryAssistant: async (data: any) => {
-    return apiRequest("/api/pantry-assistant", {
+    return internalApiRequest("/api/pantry-assistant", {
       method: "POST",
       body: JSON.stringify(data),
     });
   },
   tts: async (text: string, voiceId?: string) => {
-    return apiRequest("/api/openai-tts", {
+    return internalApiRequest("/api/openai-tts", {
       method: "POST",
       body: JSON.stringify({ text, voiceId }),
     });

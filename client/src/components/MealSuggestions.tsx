@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ChefHat, Check, ShoppingCart, CookingPot, Heart } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { sanitizeText } from "@/lib/validation";
 
@@ -32,16 +32,8 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
 
   const fetchFavorites = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("favorite_recipes")
-        .select("recipe_name")
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-      setFavorites(data?.map(f => f.recipe_name) || []);
+      const data = await apiRequest("GET", "/api/favorite-recipes");
+      setFavorites(data?.map((f: any) => f.recipe_name) || []);
     } catch (error) {
       console.error("Error fetching favorites:", error);
     }
@@ -49,38 +41,31 @@ export const MealSuggestions = ({ meals }: MealSuggestionsProps) => {
 
   const handleToggleFavorite = async (meal: MealSuggestion) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const isFavorite = favorites.includes(meal.name);
 
       if (isFavorite) {
-        const { error } = await supabase
-          .from("favorite_recipes")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("recipe_name", meal.name);
-
-        if (error) throw error;
+        const data = await apiRequest("GET", "/api/favorite-recipes");
+        const favoriteToDelete = data?.find((f: any) => f.recipe_name === meal.name);
+        
+        if (favoriteToDelete) {
+          await apiRequest("DELETE", `/api/favorite-recipes/${favoriteToDelete.id}`);
+        }
+        
         setFavorites(favorites.filter(f => f !== meal.name));
         toast({
           title: "Removed from favorites",
           description: `${meal.name} has been removed from your favorites`,
         });
       } else {
-        const { error } = await supabase
-          .from("favorite_recipes")
-          .insert({
-            user_id: user.id,
-            recipe_name: meal.name,
-            recipe_data: {
-              ingredients_available: meal.ingredients_available,
-              ingredients_needed: meal.ingredients_needed,
-              recipe: meal.recipe,
-            },
-          });
+        await apiRequest("POST", "/api/favorite-recipes", {
+          recipe_name: meal.name,
+          recipe_data: {
+            ingredients_available: meal.ingredients_available,
+            ingredients_needed: meal.ingredients_needed,
+            recipe: meal.recipe,
+          },
+        });
 
-        if (error) throw error;
         setFavorites([...favorites, meal.name]);
         toast({
           title: "Added to favorites",

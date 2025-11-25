@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -31,16 +31,7 @@ export const FavoriteRecipes = () => {
 
   const fetchFavorites = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("favorite_recipes")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const data = await apiRequest("GET", "/api/favorite-recipes");
       setFavorites((data as FavoriteRecipe[]) || []);
     } catch (error) {
       console.error("Error fetching favorites:", error);
@@ -56,12 +47,7 @@ export const FavoriteRecipes = () => {
 
   const handleRemoveFavorite = async (id: string, recipeName: string) => {
     try {
-      const { error } = await supabase
-        .from("favorite_recipes")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await apiRequest("DELETE", `/api/favorite-recipes/${id}`);
 
       setFavorites(favorites.filter(f => f.id !== id));
       toast({

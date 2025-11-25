@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { settingsSchema } from "@/lib/validation";
 import { z } from "zod";
 
@@ -60,16 +60,7 @@ export const SettingsDialog = () => {
 
   const loadSettings = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error && error.code !== "PGRST116") throw error;
+      const data = await apiRequest("GET", "/api/user-settings");
 
       if (data) {
         setHouseholdSize(data.household_size || 2);
@@ -85,10 +76,6 @@ export const SettingsDialog = () => {
   const saveSettings = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Security: Validate all settings input before saving
       const validatedData = settingsSchema.parse({
         householdSize,
         dietaryRestrictions: selectedDiets,
@@ -96,22 +83,16 @@ export const SettingsDialog = () => {
         voiceAccent
       });
 
-      const { error } = await supabase
-        .from("user_settings")
-        .upsert({
-          user_id: user.id,
-          household_size: validatedData.householdSize,
-          dietary_restrictions: validatedData.dietaryRestrictions,
-          voice_language: validatedData.voiceLanguage,
-          voice_accent: validatedData.voiceAccent,
-        });
-
-      if (error) throw error;
+      await apiRequest("POST", "/api/user-settings", {
+        household_size: validatedData.householdSize,
+        dietary_restrictions: validatedData.dietaryRestrictions,
+        voice_language: validatedData.voiceLanguage,
+        voice_accent: validatedData.voiceAccent,
+      });
 
       toast.success("Settings saved successfully!");
       setOpen(false);
     } catch (error: any) {
-      // Security: Handle validation errors gracefully
       if (error instanceof z.ZodError) {
         const messages = error.issues.map(issue => issue.message).join(", ");
         toast.error(`Invalid input: ${messages}`);

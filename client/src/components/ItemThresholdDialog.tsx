@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Settings } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 interface ItemThresholdDialogProps {
@@ -47,9 +47,7 @@ export const ItemThresholdDialog = ({
 
       console.log("Saving item data:", updateData);
 
-      const { error } = await supabase.from("pantry_items").update(updateData).eq("id", itemId);
-
-      if (error) throw error;
+      await apiRequest("PATCH", `/api/pantry-items/${itemId}`, updateData);
 
       toast.success("Item settings updated");
       setOpen(false);

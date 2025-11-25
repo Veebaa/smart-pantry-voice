@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Refrigerator, Wind, Package, Pizza } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { apiRequest } from "@/lib/api";
 import { ItemThresholdDialog } from "./ItemThresholdDialog";
 
 interface PantryItem {
@@ -52,8 +52,7 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("pantry_items").delete().eq("id", id);
-      if (error) throw error;
+      await apiRequest("DELETE", `/api/pantry-items/${id}`);
       onDelete(id);
       toast.success("Item removed from pantry");
     } catch (error: any) {
@@ -77,6 +76,7 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                 <div
                   key={item.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  data-testid={`pantry-item-${item.id}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{item.name}</span>
@@ -108,6 +108,7 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                       size="sm"
                       onClick={() => handleDelete(item.id)}
                       className="h-8 w-8 p-0"
+                      data-testid={`button-delete-${item.id}`}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

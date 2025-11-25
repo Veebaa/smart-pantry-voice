@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/contexts/UserContext";
+import { apiRequest } from "@/lib/api";
 import { Landing } from "@/components/Landing";
 import { VoiceInput } from "@/components/VoiceInput";
 import { PantryInventory } from "@/components/PantryInventory";
@@ -38,15 +39,14 @@ interface SageResponse {
 }
 
 const Index = () => {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, logout } = useUser();
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [sageResponse, setSageResponse] = useState<SageResponse | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastItem, setLastItem] = useState<string | null>(null);
   const [pendingTimeout, setPendingTimeout] = useState<NodeJS.Timeout | null>(null);
   const { speak, isSpeaking } = useVoiceOutput();
-  const [openMicAfterSpeak, setOpenMicAfterSpeak] = useState(false); // After: const { speak, isSpeaking } = useVoiceOutput();
+  const [openMicAfterSpeak, setOpenMicAfterSpeak] = useState(false);
   const [recipeFilters, setRecipeFilters] = useState<RecipeFilter[]>([
     { id: "vegetarian", label: "Vegetarian", active: false },
     { id: "vegan", label: "Vegan", active: false },
@@ -58,70 +58,19 @@ const Index = () => {
   ]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-  //   const fetchSession = async () => {
-  //     const { data: sessionData } = await supabase.auth.getSession();
-  //     console.log("sessionData:", sessionData);
-
-  //     console.log("user id:", sessionData?.session?.user?.id);
-  //     console.log("access token:", sessionData?.session?.access_token);
-
-  //     setUser(sessionData?.session?.user ?? null);
-  //     setLoading(false);
-  // };
-
-    // fetchSession(); // call the async function
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
     if (user) {
-      (async () => {
-        console.log("Fetching pantry items...");
-        const items = await fetchPantryItems();
-        console.log("Current pantry:", items);
-      })();
+      fetchPantryItems();
       
-      // Subscribe to realtime changes
-      const channel = supabase
-        .channel("pantry_changes")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "pantry_items",
-            filter: `user_id=eq.${user.id}`,
-          },
-          async () => {
-            console.log("Fetching pantry items (realtime update)...");
-            const items = await fetchPantryItems();
-            console.log("Current pantry (realtime):", items);
-          }
-        )
-        .subscribe();
+      const interval = setInterval(() => {
+        fetchPantryItems();
+      }, 5000);
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      return () => clearInterval(interval);
     }
   }, [user]);
 
-  // Timeout mechanism for pending category questions
   useEffect(() => {
     if (lastItem) {
-      // Set 2-minute timeout to auto-cancel pending question
       const timeout = setTimeout(() => {
         setLastItem(null);
         toast.info("Category question timed out");
@@ -133,7 +82,6 @@ const Index = () => {
         if (timeout) clearTimeout(timeout);
       };
     } else {
-      // Clear timeout if lastItem is cleared
       if (pendingTimeout) {
         clearTimeout(pendingTimeout);
         setPendingTimeout(null);
@@ -146,20 +94,14 @@ const Index = () => {
       const voiceInputEl = document.getElementById("voice-input-button");
       if (voiceInputEl) voiceInputEl.click();
 
-      setOpenMicAfterSpeak(false); // reset
+      setOpenMicAfterSpeak(false);
     }
   }, [isSpeaking, openMicAfterSpeak]);
 
-
   const fetchPantryItems = async () => {
     try {
-      console.log("Fetching pantry items (supabase)...");
-      const { data, error } = await supabase
-        .from("pantry_items")
-        .select("*")
-        .order("added_at", { ascending: false });
-
-      if (error) throw error;
+      console.log("Fetching pantry items (API)...");
+      const data = await apiRequest("GET", "/api/pantry-items");
       setPantryItems(data || []);
       return data || [];
     } catch (error: any) {
@@ -168,200 +110,168 @@ const Index = () => {
     }
   };
 
-const handleVoiceInput = async (transcript: string) => {
-  setProcessing(true);
+  const handleVoiceInput = async (transcript: string) => {
+    setProcessing(true);
 
-  try {
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    try {
+      const settings = await apiRequest("GET", "/api/user-settings");
 
-    const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
+      const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
 
-    // Map of obvious items to default categories
-    const defaultLocations: Record<string, string> = {
-      yoghurt: "fridge",
-      milk: "fridge",
-      cheese: "fridge",
-      eggs: "fridge",
-      butter: "fridge",
-      apple: "cupboard",
-      banana: "cupboard",
-      spaghetti: "cupboard",
-    };
+      const defaultLocations: Record<string, string> = {
+        yoghurt: "fridge",
+        milk: "fridge",
+        cheese: "fridge",
+        eggs: "fridge",
+        butter: "fridge",
+        apple: "cupboard",
+        banana: "cupboard",
+        spaghetti: "cupboard",
+      };
 
-    const lowerTranscript = transcript.toLowerCase();
+      const lowerTranscript = transcript.toLowerCase();
 
-    // Auto-add obvious items
-    const autoAddItem = Object.keys(defaultLocations).find(item =>
-      lowerTranscript.includes(item)
-    );
+      const autoAddItem = Object.keys(defaultLocations).find(item =>
+        lowerTranscript.includes(item)
+      );
 
-    if (autoAddItem) {
-      console.log(`Auto-adding obvious item: ${autoAddItem}`);
-      const category = defaultLocations[autoAddItem];
+      if (autoAddItem) {
+        console.log(`Auto-adding obvious item: ${autoAddItem}`);
+        const category = defaultLocations[autoAddItem];
 
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-
-      if (userId) {
-        const { error: insertError } = await supabase
-          .from("pantry_items")
-          .insert({
-            user_id: userId,
+        try {
+          await apiRequest("POST", "/api/pantry-items", {
             name: autoAddItem,
             category: category,
             quantity: "unknown",
             is_low: false,
           });
-        if (insertError) {
+        } catch (insertError: any) {
           console.error("Error inserting auto-added item:", insertError.message);
           toast.error(`Failed to add ${autoAddItem} to pantry`);
         }
-      }
 
-      const autoAddResponse: SageResponse = {
-        action: "add_item",
-        payload: {
-          items: [
-            { name: autoAddItem, category, quantity: "unknown", is_low: false },
-          ],
-        },
-        speak: `Added ${autoAddItem} to the ${category}.`,
-      };
-
-      setSageResponse(autoAddResponse);
-
-      // Speak and reopen mic only after speech ends
-      speak(autoAddResponse.speak, {
-        onend: async () => {
-          console.log("Fetching pantry items (after auto-add)...");
-          const items = await fetchPantryItems();
-          console.log("Current pantry:", items);
-          const voiceInputEl = document.getElementById("voice-input-button");
-          if (voiceInputEl) voiceInputEl.click();
-        },
-      });
-
-      setProcessing(false);
-      return;
-    }
-
-    // Fetch current pantry state and prepare Edge function payload
-    console.log("Preparing invocation body: fetching current pantry items to include in payload...");
-    const currentPantryItems = await fetchPantryItems(); // fetch current items from Supabase
-
-    const invocationBody: Record<string, any> = lastItem
-      ? {
-          userAnswer: transcript,
-          pending_item: lastItem,
-          dietaryRestrictions: settings?.dietary_restrictions || [],
-          householdSize: settings?.household_size || 2,
-          recipeFilters: activeFilters,
-          pantryItems: currentPantryItems, // include current pantry state
-        }
-      : {
-          voiceInput: transcript,
-          dietaryRestrictions: settings?.dietary_restrictions || [],
-          householdSize: settings?.household_size || 2,
-          recipeFilters: activeFilters,
-          pantryItems: currentPantryItems, // include current pantry state
+        const autoAddResponse: SageResponse = {
+          action: "add_item",
+          payload: {
+            items: [
+              { name: autoAddItem, category, quantity: "unknown", is_low: false },
+            ],
+          },
+          speak: `Added ${autoAddItem} to the ${category}.`,
         };
 
-    console.log("Sending to Edge Function:", invocationBody);
+        setSageResponse(autoAddResponse);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
+        speak(autoAddResponse.speak, {
+          onend: async () => {
+            console.log("Fetching pantry items (after auto-add)...");
+            const items = await fetchPantryItems();
+            console.log("Current pantry:", items);
+            const voiceInputEl = document.getElementById("voice-input-button");
+            if (voiceInputEl) voiceInputEl.click();
+          },
+        });
 
-    const { data, error } = await supabase.functions.invoke(
-      "pantry-assistant",
-      {
-        body: invocationBody,
-        headers: { Authorization: `Bearer ${accessToken}` },
+        setProcessing(false);
+        return;
       }
-    );
 
-    if (error) throw error;
+      console.log("Preparing invocation body: fetching current pantry items to include in payload...");
+      const currentPantryItems = await fetchPantryItems();
 
-    console.log("Raw Sage response from Edge:", data);
+      const invocationBody: Record<string, any> = lastItem
+        ? {
+            userAnswer: transcript,
+            pending_item: lastItem,
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+            pantryItems: currentPantryItems,
+          }
+        : {
+            voiceInput: transcript,
+            dietaryRestrictions: settings?.dietary_restrictions || [],
+            householdSize: settings?.household_size || 2,
+            recipeFilters: activeFilters,
+            pantryItems: currentPantryItems,
+          };
 
-    if (data.action === "ask") {
-      if (data.payload?.pending_item) {
-        console.log("Pending item set:", data.payload.pending_item);
-        setLastItem(data.payload.pending_item);
+      console.log("Sending to Pantry Assistant:", invocationBody);
+
+      const data = await apiRequest("POST", "/api/pantry-assistant", invocationBody);
+
+      console.log("Raw Sage response from API:", data);
+
+      if (data.action === "ask") {
+        if (data.payload?.pending_item) {
+          console.log("Pending item set:", data.payload.pending_item);
+          setLastItem(data.payload.pending_item);
+        }
+        speak(data.speak, {
+          onend: () => {
+            setOpenMicAfterSpeak(false);
+          },
+        });
+        toast.info(data.speak);
+        setProcessing(false);
+        return;
       }
-      // Speak and reopen mic after speech
-      speak(data.speak, {
-        onend: () => {
-          setOpenMicAfterSpeak(false);
-        },
-      });
-      toast.info(data.speak);
-      setProcessing(false);
-      return;
-    }
 
-    if (data.action === "add_item") {
-      console.log("Item added, clearing pending item:", lastItem);
-      setLastItem(null);
-      toast.success("Pantry updated!");
-    }
+      if (data.action === "add_item") {
+        console.log("Item added, clearing pending item:", lastItem);
+        setLastItem(null);
+        toast.success("Pantry updated!");
+      }
 
-    if (data.action === "none") {
-      console.log("Action none received, pending item cleared:", lastItem);
-      setLastItem(null);
-      toast.info(data.speak || "Action skipped");
-    }
+      if (data.action === "none") {
+        console.log("Action none received, pending item cleared:", lastItem);
+        setLastItem(null);
+        toast.info(data.speak || "Action skipped");
+      }
 
-    // Handle meal suggestions from Edge function
-    if (data.action === "suggest_meals") {
-      toast.success("Meal suggestions ready!");
+      if (data.action === "suggest_meals") {
+        toast.success("Meal suggestions ready!");
+        setSageResponse(data);
+        if (data.speak) {
+          speak(data.speak, {
+            onend: () => fetchPantryItems(),
+          });
+        }
+        return;
+      }
+
       setSageResponse(data);
+
       if (data.speak) {
         speak(data.speak, {
-          onend: () => fetchPantryItems(), // refresh pantry/shopping list after TTS
+          onend: async () => {
+            console.log("Fetching pantry items (after API response)...");
+            const items = await fetchPantryItems();
+            console.log("Current pantry:", items);
+
+            const voiceInputEl = document.getElementById("voice-input-button");
+
+            setTimeout(() => {
+              if (voiceInputEl && !isSpeaking) voiceInputEl.click();
+            }, 250);
+          },
         });
+      } else {
+        console.log("Fetching pantry items (after API response - no speak)...");
+        const items = await fetchPantryItems();
+        console.log("Current pantry:", items);
+        const voiceInputEl = document.getElementById("voice-input-button");
+        if (voiceInputEl && !isSpeaking) voiceInputEl.click();
       }
-      // We've handled the response; return early to avoid duplicate processing below
-      return;
+
+    } catch (error: any) {
+      console.error("Error processing voice input:", error);
+      toast.error(error.message || "Failed to process voice command");
+    } finally {
+      setProcessing(false);
     }
-
-    setSageResponse(data);
-
-    // Speak and reopen mic after speech
-    if (data.speak) {
-      speak(data.speak, {
-        onend: async () => {
-          console.log("Fetching pantry items (after Edge response)...");
-          const items = await fetchPantryItems();
-          console.log("Current pantry:", items);
-
-          // Only trigger mic if user is still ready
-          const voiceInputEl = document.getElementById("voice-input-button");
-
-          setTimeout(() => {
-            if (voiceInputEl && !isSpeaking) voiceInputEl.click();
-          }, 250);
-        },
-      });
-    } else {
-      console.log("Fetching pantry items (after Edge response - no speak)...");
-      const items = await fetchPantryItems();
-      console.log("Current pantry:", items);
-      const voiceInputEl = document.getElementById("voice-input-button");
-      if (voiceInputEl && !isSpeaking) voiceInputEl.click();
-    }
-
-
-  } catch (error: any) {
-    console.error("Error processing voice input:", error);
-    toast.error(error.message || "Failed to process voice command");
-  } finally {
-    setProcessing(false);
-  }
-};
+  };
 
   const handleFilterToggle = (filterId: string) => {
     setRecipeFilters((prev) =>
@@ -372,7 +282,7 @@ const handleVoiceInput = async (transcript: string) => {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await logout();
     toast.success("Signed out successfully");
   };
 
@@ -402,7 +312,6 @@ const handleVoiceInput = async (transcript: string) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -419,13 +328,13 @@ const handleVoiceInput = async (transcript: string) => {
               size="icon"
               onClick={handleSignOut}
               className="rounded-full"
+              data-testid="button-signout"
             >
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
 
-        {/* Pending category question indicator */}
         {lastItem && (
           <Card className="mb-6 border-orange-500 bg-orange-50 dark:bg-orange-950">
             <CardContent className="pt-6">
@@ -446,6 +355,7 @@ const handleVoiceInput = async (transcript: string) => {
                   size="sm"
                   onClick={handleCancelPending}
                   className="border-orange-600 text-orange-600 hover:bg-orange-100"
+                  data-testid="button-cancel-pending"
                 >
                   Cancel
                 </Button>
@@ -454,7 +364,6 @@ const handleVoiceInput = async (transcript: string) => {
           </Card>
         )}
 
-        {/* Voice Input Section */}
         <Card className="mb-8 overflow-hidden shadow-lg">
           <div className="bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 p-8">
             <div className="text-center space-y-4">
@@ -477,17 +386,15 @@ const handleVoiceInput = async (transcript: string) => {
           </div>
         </Card>
 
-        {/* Tabbed Navigation */}
         <Tabs defaultValue="pantry" className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="pantry">Your Pantry</TabsTrigger>
-            <TabsTrigger value="meals">Meal Suggestions</TabsTrigger>
-            <TabsTrigger value="favorites">Favorites</TabsTrigger>
-            <TabsTrigger value="shopping">Shopping List</TabsTrigger>
+            <TabsTrigger value="pantry" data-testid="tab-pantry">Your Pantry</TabsTrigger>
+            <TabsTrigger value="meals" data-testid="tab-meals">Meal Suggestions</TabsTrigger>
+            <TabsTrigger value="favorites" data-testid="tab-favorites">Favorites</TabsTrigger>
+            <TabsTrigger value="shopping" data-testid="tab-shopping">Shopping List</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pantry" className="space-y-6">
-            {/* Low Stock Alert */}
             {lowStockItems.length > 0 && (
               <Card className="border-destructive/50 bg-destructive/5">
                 <CardHeader className="pb-3">
