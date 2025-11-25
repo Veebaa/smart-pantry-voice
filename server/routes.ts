@@ -4,6 +4,7 @@ import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingLi
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth";
 import { z } from "zod";
+import { classifyItem, formatClarificationQuestion, getClassificationForAI } from "./itemClassifier";
 
 const router = Router();
 
@@ -352,21 +353,12 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
     } = req.body;
 
     const categories = ["fridge", "freezer", "cupboard", "pantry_staples"];
-    const defaultLocations: Record<string, string> = {
-      yoghurt: "fridge",
-      milk: "fridge",
-      cheese: "fridge",
-      eggs: "fridge",
-      butter: "fridge",
-      apple: "cupboard",
-      banana: "cupboard",
-      spaghetti: "cupboard",
-    };
 
-    // Handle follow-up category locally
+    // Handle follow-up category answer for ambiguous items
     if (pending_item && userAnswer) {
       const normalizedCategory = categories.find(cat =>
-        userAnswer.toLowerCase().includes(cat)
+        userAnswer.toLowerCase().includes(cat) || 
+        (cat === 'pantry_staples' && (userAnswer.toLowerCase().includes('staples') || userAnswer.toLowerCase().includes('pantry')))
       );
 
       if (normalizedCategory) {
@@ -378,34 +370,67 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
           isLow: false,
         });
 
+        const displayCategory = normalizedCategory === 'pantry_staples' ? 'pantry staples' : normalizedCategory;
         return res.json({
           action: "add_item",
           payload: {
             items: [{ name: pending_item, category: normalizedCategory, quantity: "unknown", is_low: false }]
           },
-          speak: `Lovely! I've added ${pending_item} to your ${normalizedCategory}.`
+          speak: `Lovely! I've added ${pending_item} to your ${displayCategory}.`
         });
       }
     }
 
-    // Auto-add if item has obvious default location
+    // SMART CLASSIFICATION: Use intelligent categorization for pending items
     if (pending_item) {
-      const lowerItem = pending_item.toLowerCase();
-      if (defaultLocations[lowerItem]) {
+      // Fetch current pantry items first to check for duplicates
+      const existingPantryItems = await db.select().from(pantryItems)
+        .where(eq(pantryItems.userId, req.user!.id));
+      
+      // Check for duplicate
+      const existingItem = existingPantryItems.find(
+        p => p.name.toLowerCase() === pending_item.toLowerCase()
+      );
+      
+      if (existingItem) {
+        const displayCategory = existingItem.category === 'pantry_staples' ? 'pantry staples' : existingItem.category;
+        return res.json({
+          action: "none",
+          payload: {},
+          speak: `${pending_item} is already in your ${displayCategory}.`
+        });
+      }
+      
+      const classification = classifyItem(pending_item);
+      
+      // If we can classify it automatically, do so
+      if (classification.category && !classification.isAmbiguous) {
         await db.insert(pantryItems).values({
           userId: req.user!.id,
           name: pending_item,
-          category: defaultLocations[lowerItem] as any,
+          category: classification.category as any,
           quantity: "unknown",
           isLow: false,
         });
 
+        const displayCategory = classification.category === 'pantry_staples' ? 'pantry staples' : classification.category;
         return res.json({
           action: "add_item",
           payload: {
-            items: [{ name: pending_item, category: defaultLocations[lowerItem], quantity: "unknown", is_low: false }]
+            items: [{ name: pending_item, category: classification.category, quantity: "unknown", is_low: false }]
           },
-          speak: `Added ${pending_item} to the ${defaultLocations[lowerItem]}.`
+          speak: `Added ${pending_item} to the ${displayCategory}.`
+        });
+      }
+      
+      // If it's ambiguous, ask the user
+      if (classification.isAmbiguous && classification.possibleCategories) {
+        return res.json({
+          action: "ask",
+          payload: {
+            pending_item: pending_item
+          },
+          speak: formatClarificationQuestion(pending_item, classification.possibleCategories)
         });
       }
     }
@@ -425,12 +450,23 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
         Number(item.currentQuantity) <= Number(item.lowStockThreshold))
     );
 
+    const smartCategorizationRules = getClassificationForAI();
+    
     const systemPrompt = `You are Sage, the kitchen assistant.
 Your job is to interpret the user's speech text, determine their intent, and return a JSON action.
 
-RULES:
-1. If the user adds an item without a category, set action="ask", pending_item="ItemName", and speak: "Fridge, freezer, or cupboard?"
-2. If a pending item exists and userAnswer includes a storage category, extract category, set action="add_item", add item, speak confirmation, clear pending item.
+${smartCategorizationRules}
+
+RULES FOR ADDING ITEMS:
+1. ADDING ITEMS TO PANTRY: When user wants to add an item to their pantry:
+   - FIRST, apply the SMART ITEM CATEGORIZATION RULES above
+   - If the item can be auto-classified (has keywords like "frozen", "tinned", "fresh", OR is a known item), set action="add_item" with the correct category - DO NOT ASK
+   - ONLY if the item is genuinely ambiguous (like "fish", "peas", "bread" without modifiers), set action="ask" with pending_item and ask ONLY about the relevant storage options
+   - Example auto-classify: "add cheese" → action="add_item", category="fridge" (known dairy)
+   - Example auto-classify: "add frozen peas" → action="add_item", category="freezer" (keyword: frozen)
+   - Example ambiguous: "add fish" → action="ask", pending_item="fish", speak: "You said fish. Should that go in the fridge or freezer?"
+
+2. If a pending item exists and userAnswer includes a storage category, set action="add_item", add item with that category, speak confirmation.
 3. If user says "skip", "cancel", "never mind", respond with action="none".
 4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
 5. RUNNING LOW COMMAND: If user says "running low on X", "low on X", "almost out of X", or "need more X":
@@ -448,6 +484,8 @@ RULES:
    - The low stock items are: ${lowStockItems.map(i => i.name).join(", ") || "none currently"}
    - Speak a summary like "Here's your shopping list with X items that are running low"
 8. Otherwise, handle normal commands.
+
+CRITICAL REMINDER: Do NOT ask "fridge, freezer, or cupboard?" for obvious items like cheese, milk, pasta, rice, frozen peas, tinned beans, etc. Only ask for genuinely ambiguous items.
 
 When suggesting meals:
 - Use action="suggest_meals" 
@@ -603,18 +641,61 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       };
     }
 
-    // Handle add_item in DB
+    // Handle add_item in DB - apply smart classification, validate categories, prevent duplicates
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
       for (const item of sageResponse.payload.items) {
-        if (!item.name || !item.category) continue;
+        if (!item.name) continue;
+        
+        // Check for duplicate - don't add if item already exists
+        const existingItem = currentPantryItems.find(
+          p => p.name.toLowerCase() === item.name.toLowerCase()
+        );
+        
+        if (existingItem) {
+          // Item already exists, just confirm
+          sageResponse.speak = `${item.name} is already in your ${existingItem.category === 'pantry_staples' ? 'pantry staples' : existingItem.category}.`;
+          continue;
+        }
+        
+        // Apply smart classification to validate/determine category
+        const classification = classifyItem(item.name);
+        let category = item.category;
+        
+        // If classification found a category, use it (override AI if it didn't provide one or provided wrong one)
+        if (classification.category && !classification.isAmbiguous) {
+          category = classification.category;
+        } else if (!category) {
+          // No category from AI and couldn't auto-classify
+          if (classification.isAmbiguous) {
+            // Item is ambiguous - ask user
+            sageResponse.action = "ask";
+            sageResponse.payload = { pending_item: item.name };
+            if (classification.possibleCategories) {
+              sageResponse.speak = formatClarificationQuestion(item.name, classification.possibleCategories);
+            }
+            continue;
+          } else {
+            // Unknown item - ask user
+            sageResponse.action = "ask";
+            sageResponse.payload = { pending_item: item.name };
+            sageResponse.speak = `I'm not sure where ${item.name} should go. Fridge, freezer, cupboard, or pantry staples?`;
+            continue;
+          }
+        }
 
         await db.insert(pantryItems).values({
           userId: req.user!.id,
           name: item.name,
-          category: item.category as any,
+          category: category as any,
           quantity: item.quantity || null,
           isLow: item.is_low || false,
         });
+        
+        // Update speak message to include the actual category used
+        const displayCategory = category === 'pantry_staples' ? 'pantry staples' : category;
+        if (!sageResponse.speak || sageResponse.speak.includes('added')) {
+          sageResponse.speak = `Added ${item.name} to the ${displayCategory}.`;
+        }
       }
     }
 

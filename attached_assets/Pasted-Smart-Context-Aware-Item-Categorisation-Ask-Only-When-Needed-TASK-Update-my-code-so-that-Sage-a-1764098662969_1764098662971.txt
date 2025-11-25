@@ -1,0 +1,154 @@
+Smart, Context-Aware Item Categorisation (Ask Only When Needed)
+
+TASK:
+Update my code so that Sage automatically categorises grocery items into storage categories (fridge, freezer, cupboard, staples) without asking the user, except when the item can validly belong to more than one category. In those ambiguous cases, Sage may ask the user to clarify.
+
+1. Storage Categories
+
+Fridge
+
+Freezer
+
+Cupboard
+
+Staples
+
+2. Behaviour Requirements
+A. Automatically Categorise All Obvious Items
+
+Examples:
+
+“cheese”, “milk”, “yogurt”, “ham” → fridge
+
+“frozen peas”, “ice cream”, “frozen fish” → freezer
+
+“spaghetti”, “pasta”, “rice”, “oats” → staples
+
+“baked beans”, “tinned tomatoes”, “canned soup” → cupboard
+
+Sage must not ask the user where these items go.
+
+B. Ask Only When the Item Is Genuinely Ambiguous
+
+These are items that could be stored in multiple locations depending on context:
+
+Examples:
+
+“fish” → could be fresh (fridge) or frozen (freezer)
+
+“peas” → could be frozen, fresh, or tinned
+
+“bread” → cupboard or freezer
+
+“berries” → fridge or freezer
+
+“corn” → fresh, frozen, or tinned
+
+“pizza” → fresh or frozen
+
+For these items, Sage should:
+
+Detect ambiguity
+
+Prompt the user once for clarification:
+
+“You added ‘fish’. Should that go in the fridge or freezer?”
+
+Then store it in the category the user specifies.
+
+Avoid repeating clarification for the same item within the same session.
+
+C. If the user specifies the form, Sage must not ask
+
+“frozen fish” → freezer
+
+“tinned peas” → cupboard
+
+“fresh peas” → fridge
+
+“dry pasta” → staples
+
+“long-life milk” → cupboard
+
+The modifier resolves the ambiguity.
+
+3. Technical Requirements
+
+Implement three-layer classification logic:
+
+Layer 1 — Direct Known-Item Classification
+
+Internal dictionary/object for common foods:
+
+cheese → fridge
+
+chicken → fridge
+
+frozen peas → freezer
+
+pasta → staples
+
+baked beans → cupboard
+(etc.)
+
+This dictionary is internal, not a user-facing list.
+
+Layer 2 — Keyword-Based Classification
+
+Match category keywords:
+
+“fresh” → fridge
+
+“frozen” → freezer
+
+“tinned”, “canned” → cupboard
+
+“dry”, “pasta”, “rice” → staples
+
+If keyword resolves the category, do not ask the user.
+
+Layer 3 — Ambiguity Detection + Clarification
+
+If an item has:
+
+no direct dictionary match
+
+AND no keyword match
+
+AND belongs to multiple possible storage categories
+
+→ Sage must ask the user for clarification.
+
+Implement an isAmbiguous(item: string) helper that:
+
+Identifies items with multiple possible forms
+
+Returns true only when classification truly cannot be inferred
+
+4. Required Output and Integration
+
+Replit should produce:
+
+A full implementation of classifyItem(item: string)
+
+An isAmbiguous(item: string) helper
+
+Keyword and dictionary matching logic
+
+Logic that calls a clarification prompt only for ambiguous items
+
+Integration into the item-adding flow
+
+Removal of any logic that asks for clarification on every item
+
+5. Summary of Desired Behaviour
+
+Automatic classification → default
+
+Clarification prompt → only for items that legitimately have multiple storage possibilities
+
+No user-facing lists → internal mapping only
+
+Context keywords override ambiguity
+
+Clear, predictable behaviour
