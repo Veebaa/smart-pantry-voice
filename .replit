@@ -7,7 +7,7 @@ channel = "stable-25_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["sh", "-c", "npm run start"]
+run = ["sh", "-c", "bun run start"]
 build = ["sh", "-c", "bun run build"]
 
 [workflows]
@@ -37,3 +37,7 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 46273
+externalPort = 3000
