@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Refrigerator, Wind, Package, Pizza } from "lucide-react";
+import { Trash2, Refrigerator, Wind, Package, Pizza, Calendar, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiRequest } from "@/lib/api";
 import { ItemThresholdDialog } from "./ItemThresholdDialog";
+import { ExpiryDateDialog } from "./ExpiryDateDialog";
+import { differenceInDays, format, parseISO, isValid } from "date-fns";
 
 interface PantryItem {
   id: string;
@@ -14,6 +16,28 @@ interface PantryItem {
   isLow: boolean;
   currentQuantity?: number | null;
   lowStockThreshold?: number | null;
+  expiresAt?: string | null;
+}
+
+function getExpiryStatus(expiresAt: string | null | undefined): { label: string; variant: "default" | "destructive" | "secondary" | "outline"; daysLeft: number | null } {
+  if (!expiresAt) return { label: "", variant: "default", daysLeft: null };
+  
+  const expiryDate = parseISO(expiresAt);
+  if (!isValid(expiryDate)) return { label: "", variant: "default", daysLeft: null };
+  
+  const daysLeft = differenceInDays(expiryDate, new Date());
+  
+  if (daysLeft < 0) {
+    return { label: "Expired", variant: "destructive", daysLeft };
+  } else if (daysLeft === 0) {
+    return { label: "Expires today", variant: "destructive", daysLeft };
+  } else if (daysLeft <= 2) {
+    return { label: `Expires in ${daysLeft}d`, variant: "destructive", daysLeft };
+  } else if (daysLeft <= 7) {
+    return { label: `Expires in ${daysLeft}d`, variant: "secondary", daysLeft };
+  } else {
+    return { label: format(expiryDate, "MMM d"), variant: "outline", daysLeft };
+  }
 }
 
 interface PantryInventoryProps {
@@ -78,7 +102,7 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                   className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                   data-testid={`pantry-item-${item.id}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-medium">{item.name}</span>
                     {item.currentQuantity != null ? (
                       <span className="text-sm text-muted-foreground">
@@ -94,8 +118,25 @@ export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryPr
                         Running Low
                       </Badge>
                     )}
+                    {(() => {
+                      const expiry = getExpiryStatus(item.expiresAt);
+                      if (!expiry.label) return null;
+                      return (
+                        <Badge variant={expiry.variant} className="text-xs flex items-center gap-1">
+                          {expiry.daysLeft !== null && expiry.daysLeft <= 2 && <AlertTriangle className="h-3 w-3" />}
+                          <Calendar className="h-3 w-3" />
+                          {expiry.label}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-1">
+                    <ExpiryDateDialog
+                      itemId={item.id}
+                      itemName={item.name}
+                      currentExpiry={item.expiresAt ?? null}
+                      onUpdate={onUpdate}
+                    />
                     <ItemThresholdDialog
                       itemId={item.id}
                       itemName={item.name}

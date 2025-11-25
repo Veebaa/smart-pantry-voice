@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { db } from "./db";
-import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, insertPantryItemSchema, insertUserSettingsSchema, insertFavoriteRecipeSchema, insertShoppingListItemSchema } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "@db/schema";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth";
 import { z } from "zod";
 import { classifyItem, formatClarificationQuestion, getClassificationForAI } from "./itemClassifier";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
@@ -134,12 +135,19 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
       isLow: z.boolean().optional(),
       currentQuantity: z.number().optional(),
       lowStockThreshold: z.number().optional(),
+      expiresAt: z.string().nullable().optional(),
     });
     
     const validatedData = updateSchema.parse(req.body);
     
+    // Convert expiresAt string to Date if provided
+    const updateData: any = { ...validatedData, updatedAt: new Date() };
+    if (validatedData.expiresAt !== undefined) {
+      updateData.expiresAt = validatedData.expiresAt ? new Date(validatedData.expiresAt) : null;
+    }
+    
     const [item] = await db.update(pantryItems)
-      .set({ ...validatedData, updatedAt: new Date() })
+      .set(updateData)
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)))
       .returning();
     
@@ -339,6 +347,215 @@ router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
   }
 });
 
+// Recipe History routes
+router.get("/api/recipe-history", requireAuth, async (req, res) => {
+  try {
+    const history = await db.select().from(recipeHistory)
+      .where(eq(recipeHistory.userId, req.user!.id))
+      .orderBy(desc(recipeHistory.madeAt));
+    res.json(history);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/api/recipe-history", requireAuth, async (req, res) => {
+  try {
+    const { recipeName, recipeData, rating, notes } = req.body;
+    
+    if (!recipeName) {
+      return res.status(400).json({ error: "Recipe name is required" });
+    }
+    
+    const [entry] = await db.insert(recipeHistory).values({
+      userId: req.user!.id,
+      recipeName,
+      recipeData: recipeData || {},
+      rating: rating || null,
+      notes: notes || null,
+    }).returning();
+    
+    res.json(entry);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch("/api/recipe-history/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, notes } = req.body;
+    
+    const updateData: any = {};
+    if (rating !== undefined) updateData.rating = rating;
+    if (notes !== undefined) updateData.notes = notes;
+    
+    const [entry] = await db.update(recipeHistory)
+      .set(updateData)
+      .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)))
+      .returning();
+    
+    res.json(entry);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete("/api/recipe-history/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(recipeHistory)
+      .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)));
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Action History / Undo routes
+router.get("/api/action-history", requireAuth, async (req, res) => {
+  try {
+    // Get last 20 undoable actions (not already undone)
+    const actions = await db.select().from(actionHistory)
+      .where(and(
+        eq(actionHistory.userId, req.user!.id),
+        isNull(actionHistory.undoneAt)
+      ))
+      .orderBy(desc(actionHistory.createdAt))
+      .limit(20);
+    res.json(actions);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/api/undo", requireAuth, async (req, res) => {
+  try {
+    // Get the most recent undoable action
+    const [lastAction] = await db.select().from(actionHistory)
+      .where(and(
+        eq(actionHistory.userId, req.user!.id),
+        isNull(actionHistory.undoneAt)
+      ))
+      .orderBy(desc(actionHistory.createdAt))
+      .limit(1);
+    
+    if (!lastAction) {
+      return res.status(404).json({ error: "Nothing to undo" });
+    }
+    
+    // Check if part of a group - if so, get all actions in that group
+    let actionsToUndo = [lastAction];
+    if (lastAction.actionGroupId) {
+      actionsToUndo = await db.select().from(actionHistory)
+        .where(and(
+          eq(actionHistory.userId, req.user!.id),
+          eq(actionHistory.actionGroupId, lastAction.actionGroupId),
+          isNull(actionHistory.undoneAt)
+        ))
+        .orderBy(desc(actionHistory.createdAt));
+    }
+    
+    const undoneItems: string[] = [];
+    
+    for (const action of actionsToUndo) {
+      if (action.actionType === 'add_item' && action.entityType === 'pantry_item') {
+        // Undo add = delete the item
+        await db.delete(pantryItems).where(eq(pantryItems.id, action.entityId));
+        const itemData = action.newData as any;
+        undoneItems.push(itemData?.name || 'item');
+      } else if (action.actionType === 'delete_item' && action.entityType === 'pantry_item') {
+        // Undo delete = restore the item
+        const prevData = action.previousData as any;
+        if (prevData) {
+          await db.insert(pantryItems).values({
+            id: action.entityId,
+            userId: req.user!.id,
+            name: prevData.name,
+            category: prevData.category,
+            quantity: prevData.quantity,
+            currentQuantity: prevData.currentQuantity,
+            lowStockThreshold: prevData.lowStockThreshold,
+            isLow: prevData.isLow,
+            expiresAt: prevData.expiresAt,
+          });
+          undoneItems.push(prevData.name || 'item');
+        }
+      } else if (action.actionType === 'update_item' && action.entityType === 'pantry_item') {
+        // Undo update = restore previous values
+        const prevData = action.previousData as any;
+        if (prevData) {
+          await db.update(pantryItems)
+            .set({
+              name: prevData.name,
+              category: prevData.category,
+              quantity: prevData.quantity,
+              currentQuantity: prevData.currentQuantity,
+              lowStockThreshold: prevData.lowStockThreshold,
+              isLow: prevData.isLow,
+              expiresAt: prevData.expiresAt,
+            })
+            .where(eq(pantryItems.id, action.entityId));
+          undoneItems.push(prevData.name || 'item');
+        }
+      } else if (action.actionType === 'add_shopping' && action.entityType === 'shopping_list_item') {
+        // Undo add to shopping list = delete
+        await db.delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
+        const itemData = action.newData as any;
+        undoneItems.push(itemData?.name || 'item');
+      } else if (action.actionType === 'delete_shopping' && action.entityType === 'shopping_list_item') {
+        // Undo delete from shopping list = restore
+        const prevData = action.previousData as any;
+        if (prevData) {
+          await db.insert(shoppingListItems).values({
+            id: action.entityId,
+            userId: req.user!.id,
+            name: prevData.name,
+            quantity: prevData.quantity,
+            checked: prevData.checked,
+          });
+          undoneItems.push(prevData.name || 'item');
+        }
+      }
+      
+      // Mark action as undone
+      await db.update(actionHistory)
+        .set({ undoneAt: new Date() })
+        .where(eq(actionHistory.id, action.id));
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Undid: ${undoneItems.join(', ')}`,
+      undoneCount: actionsToUndo.length 
+    });
+  } catch (error: any) {
+    console.error("Undo error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to log actions for undo
+async function logAction(
+  userId: string,
+  actionType: 'add_item' | 'delete_item' | 'update_item' | 'add_shopping' | 'delete_shopping',
+  entityType: 'pantry_item' | 'shopping_list_item',
+  entityId: string,
+  previousData: any = null,
+  newData: any = null,
+  actionGroupId: string | null = null
+) {
+  await db.insert(actionHistory).values({
+    userId,
+    actionType,
+    entityType,
+    entityId,
+    previousData,
+    newData,
+    actionGroupId,
+  });
+}
+
 // AI Assistant routes
 router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
   try {
@@ -461,6 +678,14 @@ CRITICAL COMMAND INTERPRETATION:
 - "add X" or "I have X" or "got X" = ADD TO PANTRY (action="add_item")
 - "add X to shopping list" or "add X to the list" or "I need to buy X" = ADD TO SHOPPING LIST (action="add_to_shopping_list")
 - "suggest meals" or "what can I cook" = SUGGEST MEALS (action="suggest_meals")
+- "undo" or "undo that" = UNDO LAST ACTION (action="undo")
+
+BATCH COMMANDS - VERY IMPORTANT:
+When user lists multiple items like "add milk, eggs, and butter" or "add cheese, bread, milk":
+- Parse ALL items and return them in the payload.items ARRAY
+- Each item should have its own name and category based on the categorization rules
+- ALWAYS return an items array, even for a single item
+- Example: "add milk, eggs, and butter" → items: [{name:"milk", category:"fridge"}, {name:"eggs", category:"fridge"}, {name:"butter", category:"fridge"}]
 
 RULES FOR ADDING ITEMS:
 1. ADDING TO PANTRY (DEFAULT FOR "add X"): When user says "add X", "I have X", "got X", "put X in the pantry":
@@ -525,7 +750,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           parameters: {
             type: "object",
             properties: {
-              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals", "generate_shopping_list", "add_to_shopping_list"] },
+              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals", "generate_shopping_list", "add_to_shopping_list", "undo"] },
               payload: {
                 type: "object",
                 properties: {
@@ -680,6 +905,10 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
 
     // Handle add_item in DB - apply smart classification, validate categories, prevent duplicates
     if (sageResponse.action === "add_item" && sageResponse.payload?.items) {
+      // Generate action group ID for batch operations
+      const actionGroupId = sageResponse.payload.items.length > 1 ? randomUUID() : null;
+      const addedItems: string[] = [];
+      
       for (const item of sageResponse.payload.items) {
         if (!item.name) continue;
         
@@ -720,19 +949,33 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           }
         }
 
-        await db.insert(pantryItems).values({
+        const [newItem] = await db.insert(pantryItems).values({
           userId: req.user!.id,
           name: item.name,
           category: category as any,
           quantity: item.quantity || null,
           isLow: item.is_low || false,
-        });
+        }).returning();
         
-        // Update speak message to include the actual category used
-        const displayCategory = category === 'pantry_staples' ? 'pantry staples' : category;
-        if (!sageResponse.speak || sageResponse.speak.includes('added')) {
-          sageResponse.speak = `Added ${item.name} to the ${displayCategory}.`;
-        }
+        // Log action for undo
+        await logAction(
+          req.user!.id,
+          'add_item',
+          'pantry_item',
+          newItem.id,
+          null,
+          { name: newItem.name, category: newItem.category, quantity: newItem.quantity },
+          actionGroupId
+        );
+        
+        addedItems.push(item.name);
+      }
+      
+      // Update speak message based on how many items were added
+      if (addedItems.length > 1) {
+        sageResponse.speak = `Added ${addedItems.length} items: ${addedItems.join(', ')}.`;
+      } else if (addedItems.length === 1) {
+        sageResponse.speak = `Added ${addedItems[0]} to your pantry.`;
       }
     }
 
@@ -766,12 +1009,76 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       for (const item of sageResponse.payload.items) {
         if (!item.name) continue;
 
-        await db.insert(shoppingListItems).values({
+        const [newItem] = await db.insert(shoppingListItems).values({
           userId: req.user!.id,
           name: item.name,
           quantity: item.quantity || null,
           checked: false,
-        });
+        }).returning();
+        
+        // Log action for undo
+        await logAction(
+          req.user!.id,
+          'add_shopping',
+          'shopping_list_item',
+          newItem.id,
+          null,
+          { name: newItem.name, quantity: newItem.quantity }
+        );
+      }
+    }
+    
+    // Handle undo action from voice command
+    if (sageResponse.action === "undo") {
+      // Get the most recent undoable action
+      const [lastAction] = await db.select().from(actionHistory)
+        .where(and(
+          eq(actionHistory.userId, req.user!.id),
+          isNull(actionHistory.undoneAt)
+        ))
+        .orderBy(desc(actionHistory.createdAt))
+        .limit(1);
+      
+      if (!lastAction) {
+        sageResponse.speak = "There's nothing to undo.";
+      } else {
+        // Get all actions in group if applicable
+        let actionsToUndo = [lastAction];
+        if (lastAction.actionGroupId) {
+          actionsToUndo = await db.select().from(actionHistory)
+            .where(and(
+              eq(actionHistory.userId, req.user!.id),
+              eq(actionHistory.actionGroupId, lastAction.actionGroupId),
+              isNull(actionHistory.undoneAt)
+            ))
+            .orderBy(desc(actionHistory.createdAt));
+        }
+        
+        const undoneItems: string[] = [];
+        
+        for (const action of actionsToUndo) {
+          if (action.actionType === 'add_item' && action.entityType === 'pantry_item') {
+            await db.delete(pantryItems).where(eq(pantryItems.id, action.entityId));
+            const itemData = action.newData as any;
+            undoneItems.push(itemData?.name || 'item');
+          } else if (action.actionType === 'add_shopping' && action.entityType === 'shopping_list_item') {
+            await db.delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
+            const itemData = action.newData as any;
+            undoneItems.push(itemData?.name || 'item');
+          }
+          
+          await db.update(actionHistory)
+            .set({ undoneAt: new Date() })
+            .where(eq(actionHistory.id, action.id));
+        }
+        
+        if (undoneItems.length > 1) {
+          sageResponse.speak = `Undid adding ${undoneItems.length} items: ${undoneItems.join(', ')}.`;
+        } else if (undoneItems.length === 1) {
+          sageResponse.speak = `Undid adding ${undoneItems[0]}.`;
+        } else {
+          sageResponse.speak = "Couldn't undo that action.";
+        }
       }
     }
 

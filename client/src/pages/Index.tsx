@@ -9,10 +9,11 @@ import { ShoppingList } from "@/components/ShoppingList";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { RecipeFilters, RecipeFilter } from "@/components/RecipeFilters";
 import { FavoriteRecipes } from "@/components/FavoriteRecipes";
+import { RecipeHistory } from "@/components/RecipeHistory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, AlertCircle } from "lucide-react";
+import { LogOut, AlertCircle, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
@@ -25,10 +26,11 @@ interface PantryItem {
   isLow: boolean;
   currentQuantity?: number | null;
   lowStockThreshold?: number | null;
+  expiresAt?: string | null;
 }
 
 interface SageResponse {
-  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals" | "generate_shopping_list" | "add_to_shopping_list";
+  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals" | "generate_shopping_list" | "add_to_shopping_list" | "undo";
   meal_suggestions?: any[];
   pending_item?: string;
   payload?: {
@@ -378,6 +380,25 @@ const Index = () => {
     toast.info("Category question cancelled");
   };
 
+  const handleUndo = async () => {
+    try {
+      const response = await apiRequest("POST", "/api/undo");
+      if (response.success) {
+        toast.success(response.message);
+        await fetchPantryItems();
+        await fetchShoppingListItems();
+      } else {
+        toast.info(response.error || "Nothing to undo");
+      }
+    } catch (error: any) {
+      if (error.message?.includes("Nothing to undo")) {
+        toast.info("Nothing to undo");
+      } else {
+        toast.error(error.message || "Failed to undo");
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -405,6 +426,16 @@ const Index = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleUndo}
+              className="rounded-full"
+              title="Undo last action"
+              data-testid="button-undo"
+            >
+              <Undo2 className="h-5 w-5" />
+            </Button>
             <SettingsDialog />
             <Button
               variant="outline"
@@ -470,11 +501,12 @@ const Index = () => {
         </Card>
 
         <Tabs defaultValue="pantry" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="pantry" data-testid="tab-pantry">Your Pantry</TabsTrigger>
-            <TabsTrigger value="meals" data-testid="tab-meals">Meal Suggestions</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsTrigger value="pantry" data-testid="tab-pantry">Pantry</TabsTrigger>
+            <TabsTrigger value="meals" data-testid="tab-meals">Meals</TabsTrigger>
             <TabsTrigger value="favorites" data-testid="tab-favorites">Favorites</TabsTrigger>
-            <TabsTrigger value="shopping" data-testid="tab-shopping">Shopping List</TabsTrigger>
+            <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
+            <TabsTrigger value="shopping" data-testid="tab-shopping">Shopping</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pantry" className="space-y-6">
@@ -527,6 +559,10 @@ const Index = () => {
 
           <TabsContent value="favorites">
             <FavoriteRecipes />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <RecipeHistory />
           </TabsContent>
 
           <TabsContent value="shopping">

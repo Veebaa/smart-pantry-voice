@@ -11,6 +11,7 @@ export const pantryItems = pgTable("pantry_items", {
   currentQuantity: doublePrecision("current_quantity"),
   lowStockThreshold: doublePrecision("low_stock_threshold"),
   isLow: boolean("is_low").default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   addedAt: timestamp("added_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -102,3 +103,43 @@ export const insertShoppingListItemSchema = createInsertSchema(shoppingListItems
 });
 export type InsertShoppingListItem = z.infer<typeof insertShoppingListItemSchema>;
 export type ShoppingListItem = typeof shoppingListItems.$inferSelect;
+
+// Recipe history - track which recipes have been made
+export const recipeHistory = pgTable("recipe_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  recipeName: text("recipe_name").notNull(),
+  recipeData: jsonb("recipe_data").notNull(),
+  rating: integer("rating"), // 1-5 stars
+  notes: text("notes"),
+  madeAt: timestamp("made_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertRecipeHistorySchema = createInsertSchema(recipeHistory).omit({
+  id: true,
+  madeAt: true,
+});
+export type InsertRecipeHistory = z.infer<typeof insertRecipeHistorySchema>;
+export type RecipeHistory = typeof recipeHistory.$inferSelect;
+
+// Action history for undo functionality
+export const actionHistory = pgTable("action_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  actionType: text("action_type").notNull().$type<'add_item' | 'delete_item' | 'update_item' | 'add_shopping' | 'delete_shopping'>(),
+  entityType: text("entity_type").notNull().$type<'pantry_item' | 'shopping_list_item'>(),
+  entityId: uuid("entity_id").notNull(),
+  previousData: jsonb("previous_data"),
+  newData: jsonb("new_data"),
+  actionGroupId: uuid("action_group_id"), // Groups batch operations together
+  undoneAt: timestamp("undone_at", { withTimezone: true }), // Null = not undone, set = when it was undone
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertActionHistorySchema = createInsertSchema(actionHistory).omit({
+  id: true,
+  createdAt: true,
+  undoneAt: true,
+});
+export type InsertActionHistory = z.infer<typeof insertActionHistorySchema>;
+export type ActionHistory = typeof actionHistory.$inferSelect;
