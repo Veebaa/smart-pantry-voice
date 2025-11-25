@@ -6,7 +6,7 @@ expertMode = true
 channel = "stable-25_05"
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 run = ["sh", "-c", "bun run start"]
 build = ["sh", "-c", "bun run build"]
 
