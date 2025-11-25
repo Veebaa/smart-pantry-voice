@@ -13,7 +13,7 @@ import { RecipeHistory } from "@/components/RecipeHistory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, AlertCircle, Undo2 } from "lucide-react";
+import { LogOut, AlertCircle, Undo2, ChefHat, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
@@ -399,6 +399,40 @@ const Index = () => {
     }
   };
 
+  const handleSuggestMeals = async () => {
+    setProcessing(true);
+    try {
+      const settings = await apiRequest("GET", "/api/user-settings");
+      const activeFilters = recipeFilters.filter(f => f.active).map(f => f.id);
+      const currentPantryItems = await fetchPantryItems();
+
+      const invocationBody = {
+        voiceInput: "suggest meals",
+        dietaryRestrictions: settings?.dietary_restrictions || [],
+        householdSize: settings?.household_size || 2,
+        recipeFilters: activeFilters,
+        pantryItems: currentPantryItems,
+      };
+
+      const data = await apiRequest("POST", "/api/pantry-assistant", invocationBody);
+      
+      if (data.action === "suggest_meals" || data.meal_suggestions || data.payload?.meal_suggestions) {
+        toast.success("Meal suggestions ready!");
+        setSageResponse(data);
+        if (data.speak) {
+          speak(data.speak);
+        }
+      } else {
+        toast.info(data.speak || "No meal suggestions available");
+      }
+    } catch (error: any) {
+      console.error("Error getting meal suggestions:", error);
+      toast.error(error.message || "Failed to get meal suggestions");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -534,8 +568,20 @@ const Index = () => {
 
           <TabsContent value="meals" className="space-y-6">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
                 <CardTitle>Customize Your Meal Suggestions</CardTitle>
+                <Button
+                  onClick={handleSuggestMeals}
+                  disabled={processing || isSpeaking}
+                  data-testid="button-suggest-meals"
+                >
+                  {processing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ChefHat className="h-4 w-4 mr-2" />
+                  )}
+                  {processing ? "Getting Ideas..." : "Suggest Meals"}
+                </Button>
               </CardHeader>
               <CardContent>
                 <RecipeFilters filters={recipeFilters} onFilterToggle={handleFilterToggle} />
@@ -549,8 +595,22 @@ const Index = () => {
               ) : (
                 <Card>
                   <CardContent className="pt-6 text-center text-muted-foreground">
-                    <p>Ask for meal suggestions using voice commands!</p>
-                    <p className="text-sm mt-2">Try saying: "What can I cook?" or "Suggest meals"</p>
+                    <ChefHat className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="font-medium">Ready to cook something delicious?</p>
+                    <p className="text-sm mt-2 mb-4">Click the button above or use voice commands</p>
+                    <Button
+                      variant="outline"
+                      onClick={handleSuggestMeals}
+                      disabled={processing || isSpeaking}
+                      data-testid="button-suggest-meals-empty"
+                    >
+                      {processing ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <ChefHat className="h-4 w-4 mr-2" />
+                      )}
+                      {processing ? "Getting Ideas..." : "Get Meal Ideas"}
+                    </Button>
                   </CardContent>
                 </Card>
               );
