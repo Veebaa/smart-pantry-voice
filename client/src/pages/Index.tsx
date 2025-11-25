@@ -29,6 +29,8 @@ interface PantryItem {
 
 interface SageResponse {
   action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals";
+  meal_suggestions?: any[];
+  pending_item?: string;
   payload?: {
     items?: any[];
     meal_suggestions?: any[];
@@ -430,16 +432,19 @@ const Index = () => {
               </CardContent>
             </Card>
             
-            {sageResponse?.payload?.meal_suggestions && sageResponse.payload.meal_suggestions.length > 0 ? (
-              <MealSuggestions meals={sageResponse.payload.meal_suggestions} />
-            ) : (
-              <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
-                  <p>Ask for meal suggestions using voice commands!</p>
-                  <p className="text-sm mt-2">Try saying: "What can I cook?" or "Suggest meals"</p>
-                </CardContent>
-              </Card>
-            )}
+            {(() => {
+              const meals = sageResponse?.meal_suggestions || sageResponse?.payload?.meal_suggestions;
+              return meals && meals.length > 0 ? (
+                <MealSuggestions meals={meals} />
+              ) : (
+                <Card>
+                  <CardContent className="pt-6 text-center text-muted-foreground">
+                    <p>Ask for meal suggestions using voice commands!</p>
+                    <p className="text-sm mt-2">Try saying: "What can I cook?" or "Suggest meals"</p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="favorites">
