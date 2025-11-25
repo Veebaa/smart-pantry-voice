@@ -5,6 +5,10 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
 
+// Log startup information immediately
+console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
+console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
+
 const app = express();
 const server = createServer(app);
 
@@ -50,24 +54,33 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  app.use(routes);
+  try {
+    console.log("[startup] Initializing routes...");
+    app.use(routes);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
-  });
+      res.status(status).json({ message });
+      console.error("[error]", err);
+    });
 
-  if (process.env.NODE_ENV !== "production") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[startup] Setting up Vite for development...");
+      await setupVite(app, server);
+    } else {
+      console.log("[startup] Setting up static file serving for production...");
+      serveStatic(app);
+    }
+
+    const PORT = 5000;
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`[startup] Server listening on 0.0.0.0:${PORT}`);
+      log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("[startup] Failed to start server:", error);
+    process.exit(1);
   }
-
-  const PORT = 5000;
-  server.listen(PORT, "0.0.0.0", () => {
-    log(`Server running on port ${PORT}`);
-  });
 })();
