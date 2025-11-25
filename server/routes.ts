@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "./db";
-import { pantryItems, userSettings, favoriteRecipes, users, insertPantryItemSchema, insertUserSettingsSchema, insertFavoriteRecipeSchema } from "@db/schema";
+import { pantryItems, userSettings, favoriteRecipes, users, sessions, insertPantryItemSchema, insertUserSettingsSchema, insertFavoriteRecipeSchema } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth";
 import { z } from "zod";
@@ -14,7 +14,11 @@ router.post("/api/auth/signup", async (req, res) => {
     
     const authSchema = z.object({
       email: z.string().email(),
-      password: z.string().min(6),
+      password: z.string()
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+        .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+        .regex(/[0-9]/, "Password must contain at least one number"),
     });
     
     const validatedData = authSchema.parse({ email, password });
@@ -88,6 +92,10 @@ router.post("/api/auth/signin", async (req, res) => {
 });
 
 router.post("/api/auth/signout", requireAuth, async (req, res) => {
+  const sessionToken = req.cookies.session_token;
+  if (sessionToken) {
+    await db.delete(sessions).where(eq(sessions.token, sessionToken));
+  }
   res.clearCookie("session_token");
   res.json({ success: true });
 });
@@ -124,8 +132,20 @@ router.post("/api/pantry-items", requireAuth, async (req, res) => {
 router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    
+    const updateSchema = z.object({
+      name: z.string().optional(),
+      category: z.enum(["fridge", "freezer", "cupboard", "pantry_staples"]).optional(),
+      quantity: z.string().optional(),
+      isLow: z.boolean().optional(),
+      currentQuantity: z.number().optional(),
+      lowStockThreshold: z.number().optional(),
+    });
+    
+    const validatedData = updateSchema.parse(req.body);
+    
     const [item] = await db.update(pantryItems)
-      .set({ ...req.body, updatedAt: new Date() })
+      .set({ ...validatedData, updatedAt: new Date() })
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)))
       .returning();
     
@@ -135,6 +155,9 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
     
     res.json(item);
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0].message });
+    }
     res.status(500).json({ error: error.message });
   }
 });
