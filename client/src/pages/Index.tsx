@@ -28,7 +28,7 @@ interface PantryItem {
 }
 
 interface SageResponse {
-  action: "add_item" | "update_item" | "ask" | "none";
+  action: "add_item" | "update_item" | "ask" | "none" | "suggest_meals";
   payload?: {
     items?: any[];
     meal_suggestions?: any[];
@@ -210,7 +210,8 @@ const Index = () => {
         }
         speak(data.speak, {
           onend: () => {
-            setOpenMicAfterSpeak(false);
+            // Open mic after asking follow-up question
+            setOpenMicAfterSpeak(true);
           },
         });
         toast.info(data.speak);

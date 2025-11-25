@@ -329,7 +329,14 @@ RULES:
 1. If the user adds an item without a category, set action="ask", pending_item="ItemName", and speak: "Fridge, freezer, or cupboard?"
 2. If a pending item exists and userAnswer includes a storage category, extract category, set action="add_item", add item, speak confirmation, clear pending item.
 3. If user says "skip", "cancel", "never mind", respond with action="none".
-4. Otherwise, handle normal commands.
+4. If user asks for meal suggestions (e.g., "what can I cook", "suggest meals", "recipe ideas", "what should I make"), set action="suggest_meals" and provide 3-4 meal ideas based on pantry items.
+5. Otherwise, handle normal commands.
+
+When suggesting meals:
+- Use action="suggest_meals" 
+- Include meal_suggestions array in payload with each meal having: name, ingredients_available (from pantry), ingredients_needed (to buy), and recipe object with ingredients_with_quantities, cooking_steps, and tips
+- Consider dietary restrictions and household size
+- Prioritize meals that use ingredients already in the pantry
 
 Current pantry inventory:
 ${JSON.stringify(currentPantryItems, null, 2)}
@@ -350,7 +357,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           parameters: {
             type: "object",
             properties: {
-              action: { type: "string", enum: ["add_item", "update_item", "ask", "none"] },
+              action: { type: "string", enum: ["add_item", "update_item", "ask", "none", "suggest_meals"] },
               payload: {
                 type: "object",
                 properties: {
@@ -366,7 +373,26 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
                       }
                     }
                   },
-                  pending_item: { type: "string" }
+                  pending_item: { type: "string" },
+                  meal_suggestions: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        ingredients_available: { type: "array", items: { type: "string" } },
+                        ingredients_needed: { type: "array", items: { type: "string" } },
+                        recipe: {
+                          type: "object",
+                          properties: {
+                            ingredients_with_quantities: { type: "array", items: { type: "string" } },
+                            cooking_steps: { type: "array", items: { type: "string" } },
+                            tips: { type: "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               },
               speak: { type: "string" }
