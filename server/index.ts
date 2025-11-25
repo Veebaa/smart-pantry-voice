@@ -1,13 +1,19 @@
 import express, { type Request, Response, NextFunction } from "express";
-import routes from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
 
-// Log startup information immediately
+// Log startup information immediately - BEFORE any database imports
 console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
+
+// Validate required environment variables BEFORE importing database-dependent modules
+if (!process.env.DATABASE_URL) {
+  console.error("[startup] FATAL: DATABASE_URL environment variable is not set!");
+  console.error("[startup] Please configure DATABASE_URL in your deployment secrets.");
+  process.exit(1);
+}
 
 const app = express();
 const server = createServer(app);
@@ -55,6 +61,9 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    // Dynamically import routes AFTER env var validation
+    console.log("[startup] Loading routes module...");
+    const { default: routes } = await import("./routes.js");
     console.log("[startup] Initializing routes...");
     app.use(routes);
 
