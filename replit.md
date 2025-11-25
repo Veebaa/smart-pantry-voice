@@ -110,6 +110,9 @@ The following API keys are needed for full functionality:
 - ✅ Fixed security issues: session revocation, PATCH validation, password policy
 - ✅ Replaced bcrypt with bcryptjs for Replit compatibility
 - ✅ Server running successfully on port 5000
+- ✅ Implemented smart item categorization with keyword priority and ambiguity detection
+- ✅ Added duplicate prevention for pantry items
+- ✅ Classification validates/overrides AI-provided categories
 
 ## Next Steps
 1. Request API keys from user (LOVABLE_API_KEY, OPENAI_API_KEY)
