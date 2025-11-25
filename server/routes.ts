@@ -38,9 +38,9 @@ router.post("/api/auth/signup", async (req, res) => {
     
     res.cookie("session_token", session.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: "lax",
+      sameSite: "none",
     });
     
     res.json({ user: { id: user.id, email: user.email } });
@@ -77,9 +77,9 @@ router.post("/api/auth/signin", async (req, res) => {
     
     res.cookie("session_token", session.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: "lax",
+      sameSite: "none",
     });
     
     res.json({ user: { id: user.id, email: user.email } });
