@@ -28,7 +28,7 @@ export async function initializeDb(): Promise<void> {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
-      ssl: isProduction ? 'require' : false,
+      ssl: 'require',
       onnotice: () => {},
     });
 
