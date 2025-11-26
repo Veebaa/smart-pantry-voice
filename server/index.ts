@@ -120,13 +120,15 @@ server.listen(PORT, "0.0.0.0", async () => {
   log(`Server running on port ${PORT}`);
 
   try {
+    // IMPORTANT: Initialize routes BEFORE Vite so API endpoints are registered first
+    // Vite's wildcard handler would otherwise catch /api/* requests and return HTML
+    await initializeRoutes();
+    
     if (process.env.NODE_ENV !== "production") {
       console.log("[startup] Setting up Vite for development...");
       await setupVite(app, server);
     }
     // Note: In production, static files are already set up above before server.listen
-
-    await initializeRoutes();
     
     // In production, add SPA fallback AFTER routes are loaded
     // This serves index.html for any unmatched routes (client-side routing)
