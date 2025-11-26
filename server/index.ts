@@ -3,6 +3,12 @@ import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
@@ -23,13 +29,27 @@ app.use(cookieParser());
 let routesInitialized = false;
 let routesInitializing = false;
 
+// Health endpoint - must respond immediately
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", routesReady: routesInitialized });
 });
 
+// In production, set up static file serving IMMEDIATELY so / responds before routes load
+if (process.env.NODE_ENV === "production") {
+  const distPath = path.resolve(__dirname, "..", "public");
+  console.log(`[startup] Setting up static files from: ${distPath}`);
+  
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    console.log("[startup] Static file middleware registered");
+  } else {
+    console.error(`[startup] WARNING: Static files not found at ${distPath}`);
+  }
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const reqPath = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -40,8 +60,8 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (reqPath.startsWith("/api")) {
+      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -92,12 +112,24 @@ server.listen(PORT, "0.0.0.0", async () => {
     if (process.env.NODE_ENV !== "production") {
       console.log("[startup] Setting up Vite for development...");
       await setupVite(app, server);
-    } else {
-      console.log("[startup] Setting up static file serving for production...");
-      serveStatic(app);
     }
+    // Note: In production, static files are already set up above before server.listen
 
     await initializeRoutes();
+    
+    // In production, add SPA fallback AFTER routes are loaded
+    // This serves index.html for any unmatched routes (client-side routing)
+    if (process.env.NODE_ENV === "production") {
+      const distPath = path.resolve(__dirname, "..", "public");
+      const indexPath = path.resolve(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        app.use("*", (_req, res) => {
+          res.sendFile(indexPath);
+        });
+        console.log("[startup] SPA fallback registered");
+      }
+    }
+    
     console.log("[startup] Application fully initialized");
   } catch (error) {
     console.error("[startup] Failed during post-listen initialization:", error);
