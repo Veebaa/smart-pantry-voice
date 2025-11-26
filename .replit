@@ -6,9 +6,9 @@ expertMode = true
 channel = "stable-25_05"
 
 [deployment]
-deploymentTarget = "vm"
-run = ["sh", "-c", "bun run start"]
-build = ["sh", "-c", "bun run build"]
+deploymentTarget = "autoscale"
+run = ["bun", "run", "start"]
+build = ["bun", "run", "build"]
 
 [workflows]
 runButton = "Project"
@@ -39,5 +39,5 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 38991
+localPort = 46789
 externalPort = 3000

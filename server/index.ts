@@ -37,11 +37,22 @@ app.get("/health", (_req, res) => {
 // In production, set up static file serving IMMEDIATELY so / responds before routes load
 if (process.env.NODE_ENV === "production") {
   const distPath = path.resolve(__dirname, "..", "public");
+  const indexPath = path.resolve(distPath, "index.html");
   console.log(`[startup] Setting up static files from: ${distPath}`);
   
   if (fs.existsSync(distPath)) {
+    // Serve static assets (JS, CSS, images, etc.)
     app.use(express.static(distPath));
     console.log("[startup] Static file middleware registered");
+    
+    // Explicit root route handler - serves index.html for / immediately
+    // This ensures health checks to / pass before routes are loaded
+    if (fs.existsSync(indexPath)) {
+      app.get("/", (_req, res) => {
+        res.sendFile(indexPath);
+      });
+      console.log("[startup] Root route handler registered");
+    }
   } else {
     console.error(`[startup] WARNING: Static files not found at ${distPath}`);
   }

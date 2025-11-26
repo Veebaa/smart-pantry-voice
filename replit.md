@@ -128,11 +128,13 @@ The following API keys are needed for full functionality:
 - ✅ Added "Cook This" button to save selected recipes to history tab
 
 ## Deployment Configuration
-- **Target**: Reserved VM (for stateful database connections)
+- **Target**: Autoscale (stateless web application)
 - **Build**: `bun run build` (compiles TypeScript to dist/)
 - **Run**: `bun run start` (NODE_ENV=production node dist/server/index.js)
 - **Port**: 5000 → 80 (external)
-- **Health Check**: GET /health returns {"status":"ok"} immediately
+- **Health Check**: Both `/` and `/health` respond immediately before routes load
+- **Static Files**: Served synchronously at startup (before server.listen)
+- **Database**: Connects lazily on first API request
 
 ## Next Steps
 1. Deploy the application (click Publish button)
