@@ -10,10 +10,13 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { RecipeFilters, RecipeFilter } from "@/components/RecipeFilters";
 import { FavoriteRecipes } from "@/components/FavoriteRecipes";
 import { RecipeHistory } from "@/components/RecipeHistory";
+import { FloatingVoiceButton } from "@/components/FloatingVoiceButton";
+import { QuickAddDialog } from "@/components/QuickAddDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut, AlertCircle, Undo2, ChefHat, Loader2 } from "lucide-react";
+import { LogOut, AlertCircle, Undo2, ChefHat, Loader2, Leaf, Mic, Package } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { useVoiceOutput } from "@/hooks/useVoiceOutput";
@@ -451,15 +454,24 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Sage
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome back, {user?.email}
-            </p>
-          </div>
           <div className="flex items-center gap-3">
+            <Leaf className="h-10 w-10 text-primary" strokeWidth={1.5} />
+            <div>
+              <h1 className="text-4xl font-bold italic" style={{
+                background: 'linear-gradient(135deg, hsl(var(--sage-light)), hsl(var(--sage-medium)), hsl(var(--sage-dark)))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
+                Sage
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Welcome, {user?.email?.split('@')[0]}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <QuickAddDialog onItemAdded={fetchPantryItems} />
             <Button
               variant="outline"
               size="icon"
@@ -470,6 +482,7 @@ const Index = () => {
             >
               <Undo2 className="h-5 w-5" />
             </Button>
+            <ThemeToggle />
             <SettingsDialog />
             <Button
               variant="outline"
@@ -563,6 +576,37 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
+            
+            {/* Empty State Guidance */}
+            {pantryItems.length === 0 && (
+              <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+                <CardContent className="pt-8 pb-8 text-center">
+                  <Package className="h-16 w-16 mx-auto mb-4 text-primary/50" />
+                  <h3 className="text-xl font-semibold mb-2">Your pantry is empty</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    Start by adding items using your voice or the + button above. Try saying:
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2 mb-6">
+                    <Badge variant="secondary" className="text-sm py-1 px-3">
+                      <Mic className="h-3 w-3 mr-1" />
+                      "Add milk to the fridge"
+                    </Badge>
+                    <Badge variant="secondary" className="text-sm py-1 px-3">
+                      <Mic className="h-3 w-3 mr-1" />
+                      "I have eggs and butter"
+                    </Badge>
+                    <Badge variant="secondary" className="text-sm py-1 px-3">
+                      <Mic className="h-3 w-3 mr-1" />
+                      "Add pasta to cupboard"
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Or use the floating microphone button at the bottom right
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+            
             <PantryInventory items={pantryItems} onDelete={handleDeleteItem} onUpdate={fetchPantryItems} />
           </TabsContent>
 
@@ -653,6 +697,12 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Floating Voice Button */}
+      <FloatingVoiceButton 
+        onTranscript={handleVoiceInput} 
+        disabled={processing || isSpeaking} 
+      />
     </div>
   );
 };

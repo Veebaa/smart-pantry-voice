@@ -1,10 +1,32 @@
 import { Auth } from "@/components/Auth";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Mic, ChefHat, ShoppingCart, Sparkles, Leaf } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Landing = () => {
+  const scrollToAuth = () => {
+    document.getElementById('auth-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4 max-w-6xl flex h-14 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Leaf className="h-6 w-6 text-primary" strokeWidth={1.5} />
+            <span className="text-xl font-bold italic text-primary">Sage</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Button onClick={scrollToAuth} data-testid="button-get-started-header">
+              Get Started
+            </Button>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-16 max-w-6xl">
         <div className="text-center space-y-6 mb-16">
@@ -119,7 +141,7 @@ export const Landing = () => {
         </div>
 
         {/* Auth Section */}
-        <div className="max-w-md mx-auto">
+        <div id="auth-section" className="max-w-md mx-auto scroll-mt-20">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-semibold mb-2">Ready to Get Started?</h2>
             <p className="text-muted-foreground">Create your free account and start managing your pantry today</p>
