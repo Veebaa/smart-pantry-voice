@@ -238,13 +238,14 @@ const Index = () => {
           console.log("Pending item set:", pendingItem);
           setLastItem(pendingItem);
         }
-        speak(data.speak, {
+        const speakText = data.speak || `Where should ${pendingItem || 'that'} go? Fridge, freezer, cupboard, or pantry?`;
+        speak(speakText, {
           onend: () => {
             // Open mic after asking follow-up question
             setOpenMicAfterSpeak(true);
           },
         });
-        toast.info(data.speak);
+        toast.info(speakText);
         setProcessing(false);
         return;
       }

@@ -947,8 +947,10 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
             // Item is ambiguous - ask user
             sageResponse.action = "ask";
             sageResponse.payload = { pending_item: item.name };
-            if (classification.possibleCategories) {
+            if (classification.possibleCategories && classification.possibleCategories.length > 0) {
               sageResponse.speak = formatClarificationQuestion(item.name, classification.possibleCategories);
+            } else {
+              sageResponse.speak = `I'm not sure where ${item.name} should go. Fridge, freezer, cupboard, or pantry staples?`;
             }
             continue;
           } else {
