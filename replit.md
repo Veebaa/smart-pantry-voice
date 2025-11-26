@@ -107,7 +107,14 @@ The following API keys are needed for full functionality:
 - ✅ Server now starts listening immediately before loading routes/database
 - ✅ Added /health endpoint for deployment health checks
 - ✅ Database connects lazily on first API request (not on module import)
-- ✅ Deployment target: Reserved VM for stateful database connections
+- ✅ Deployment target: Autoscale for stateless web application
+- ✅ Updated favicon to sage leaf icon
+- ✅ Redesigned logo with integrated sage leaf and gradient colors
+- ✅ Added sticky header with "Get Started" button on landing page
+- ✅ Created floating voice button accessible from any tab
+- ✅ Added empty state guidance for new users with sample commands
+- ✅ Added quick manual add dialog for pantry items
+- ✅ Added dark mode toggle with localStorage persistence
 
 ## Recent Changes (November 25, 2025)
 - ✅ Migrated from Supabase to PostgreSQL with Drizzle ORM
