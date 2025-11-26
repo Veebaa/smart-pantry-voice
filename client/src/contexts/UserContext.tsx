@@ -35,6 +35,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       }
       
       const response = await fetch("/api/auth/user", {
+        credentials: 'include',
         headers: {
           Authorization: `Bearer ${token}`,
         },

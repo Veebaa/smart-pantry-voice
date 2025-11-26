@@ -24,6 +24,7 @@ function getAuthHeaders(): Record<string, string> {
 export async function apiRequest(method: string, endpoint: string, data?: any) {
   const options: RequestInit = {
     method,
+    credentials: 'include',
     headers: {
       "Content-Type": "application/json",
       ...getAuthHeaders(),
@@ -47,6 +48,7 @@ export async function apiRequest(method: string, endpoint: string, data?: any) {
 async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
+    credentials: 'include',
     headers: {
       "Content-Type": "application/json",
       ...getAuthHeaders(),
