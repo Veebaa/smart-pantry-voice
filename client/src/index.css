@@ -18,20 +18,25 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 30 20% 15%;
 
-    /* Fresh herb green as primary */
-    --primary: 120 40% 45%;
+    /* Sage green as primary */
+    --primary: 95 35% 45%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 120 45% 60%;
+    --primary-glow: 95 40% 55%;
 
-    /* Warm produce orange as secondary */
-    --secondary: 25 85% 60%;
+    /* Deeper sage green as secondary */
+    --secondary: 100 40% 35%;
     --secondary-foreground: 0 0% 100%;
+    
+    /* Sage gradient colors for logo */
+    --sage-light: 95 35% 55%;
+    --sage-medium: 100 40% 45%;
+    --sage-dark: 105 45% 35%;
 
     --muted: 40 20% 90%;
     --muted-foreground: 30 15% 45%;
 
-    /* Accent for highlights */
-    --accent: 25 85% 60%;
+    /* Light sage accent for highlights */
+    --accent: 90 30% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -76,17 +81,22 @@ All colors MUST be HSL.
     --popover: 220 25% 12%;
     --popover-foreground: 40 30% 95%;
 
-    --primary: 120 45% 55%;
+    --primary: 95 40% 50%;
     --primary-foreground: 220 30% 8%;
-    --primary-glow: 120 50% 65%;
+    --primary-glow: 95 45% 60%;
 
-    --secondary: 25 80% 65%;
+    --secondary: 100 45% 40%;
     --secondary-foreground: 220 30% 8%;
+    
+    /* Sage gradient colors for logo */
+    --sage-light: 95 40% 60%;
+    --sage-medium: 100 45% 50%;
+    --sage-dark: 105 50% 40%;
 
     --muted: 220 20% 20%;
     --muted-foreground: 40 20% 65%;
 
-    --accent: 25 80% 65%;
+    --accent: 90 35% 55%;
     --accent-foreground: 220 30% 8%;
 
     --destructive: 0 72% 51%;

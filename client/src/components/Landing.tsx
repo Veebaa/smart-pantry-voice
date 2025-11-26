@@ -1,6 +1,6 @@
 import { Auth } from "@/components/Auth";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, ChefHat, ShoppingCart, Sparkles } from "lucide-react";
+import { Mic, ChefHat, ShoppingCart, Sparkles, Leaf } from "lucide-react";
 
 export const Landing = () => {
   return (
@@ -13,11 +13,20 @@ export const Landing = () => {
             <span className="text-sm font-medium text-primary">Voice-enabled</span>
           </div>
           
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent leading-tight">
-            Sage,
-            <br />
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <Leaf className="h-14 w-14 md:h-16 md:w-16 text-primary" strokeWidth={1.5} />
+            <h1 className="text-5xl md:text-6xl font-bold italic" style={{
+              background: 'linear-gradient(135deg, hsl(var(--sage-light)), hsl(var(--sage-medium)), hsl(var(--sage-dark)))',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              Sage
+            </h1>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-semibold text-foreground/80">
             Your AI-Powered Kitchen Assistant
-          </h1>
+          </h2>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             Manage your food inventory hands-free with voice commands. Get personalised meal suggestions, 
