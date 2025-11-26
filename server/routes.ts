@@ -1,5 +1,5 @@
-import { Router } from "express";
-import { db } from "./db.js";
+import { Router, Request, Response, NextFunction } from "express";
+import { getDb, initializeDb } from "./db.js";
 import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "../shared/schema.js";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth.js";
@@ -8,6 +8,17 @@ import { classifyItem, formatClarificationQuestion, getClassificationForAI } fro
 import { randomUUID } from "crypto";
 
 const router = Router();
+
+router.use(async (_req: Request, _res: Response, next: NextFunction) => {
+  try {
+    await initializeDb();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+const db = () => getDb();
 
 // Auth routes
 router.post("/api/auth/signup", async (req, res) => {
@@ -25,13 +36,13 @@ router.post("/api/auth/signup", async (req, res) => {
     
     const validatedData = authSchema.parse({ email, password });
     
-    const existingUser = await db.select().from(users).where(eq(users.email, validatedData.email)).limit(1);
+    const existingUser = await db().select().from(users).where(eq(users.email, validatedData.email)).limit(1);
     if (existingUser.length > 0) {
       return res.status(400).json({ error: "Email already registered" });
     }
     
     const passwordHash = await hashPassword(validatedData.password);
-    const [user] = await db.insert(users).values({
+    const [user] = await db().insert(users).values({
       email: validatedData.email,
       passwordHash,
     }).returning();
@@ -58,7 +69,7 @@ router.post("/api/auth/signin", async (req, res) => {
     
     const validatedData = authSchema.parse({ email, password });
     
-    const [user] = await db.select().from(users).where(eq(users.email, validatedData.email)).limit(1);
+    const [user] = await db().select().from(users).where(eq(users.email, validatedData.email)).limit(1);
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
@@ -89,7 +100,7 @@ router.post("/api/auth/signout", async (req, res) => {
   }
   
   if (token) {
-    await db.delete(sessions).where(eq(sessions.token, token));
+    await db().delete(sessions).where(eq(sessions.token, token));
   }
   res.clearCookie("session_token");
   res.json({ success: true });
@@ -102,7 +113,7 @@ router.get("/api/auth/user", requireAuth, async (req, res) => {
 // Pantry Items routes
 router.get("/api/pantry-items", requireAuth, async (req, res) => {
   try {
-    const items = await db.select().from(pantryItems)
+    const items = await db().select().from(pantryItems)
       .where(eq(pantryItems.userId, req.user!.id))
       .orderBy(desc(pantryItems.addedAt));
     res.json(items);
@@ -114,7 +125,7 @@ router.get("/api/pantry-items", requireAuth, async (req, res) => {
 router.post("/api/pantry-items", requireAuth, async (req, res) => {
   try {
     const validatedData = insertPantryItemSchema.parse({ ...req.body, userId: req.user!.id });
-    const [item] = await db.insert(pantryItems).values(validatedData as any).returning();
+    const [item] = await db().insert(pantryItems).values(validatedData as any).returning();
     res.json(item);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -146,7 +157,7 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
       updateData.expiresAt = validatedData.expiresAt ? new Date(validatedData.expiresAt) : null;
     }
     
-    const [item] = await db.update(pantryItems)
+    const [item] = await db().update(pantryItems)
       .set(updateData)
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)))
       .returning();
@@ -167,7 +178,7 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
 router.delete("/api/pantry-items/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.delete(pantryItems)
+    await db().delete(pantryItems)
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
@@ -178,7 +189,7 @@ router.delete("/api/pantry-items/:id", requireAuth, async (req, res) => {
 // User Settings routes
 router.get("/api/user-settings", requireAuth, async (req, res) => {
   try {
-    const [settings] = await db.select().from(userSettings)
+    const [settings] = await db().select().from(userSettings)
       .where(eq(userSettings.userId, req.user!.id))
       .limit(1);
     res.json(settings || null);
@@ -191,18 +202,18 @@ router.post("/api/user-settings", requireAuth, async (req, res) => {
   try {
     const validatedData = insertUserSettingsSchema.parse({ ...req.body, userId: req.user!.id });
     
-    const [existing] = await db.select().from(userSettings)
+    const [existing] = await db().select().from(userSettings)
       .where(eq(userSettings.userId, req.user!.id))
       .limit(1);
     
     let settings;
     if (existing) {
-      [settings] = await db.update(userSettings)
+      [settings] = await db().update(userSettings)
         .set({ ...validatedData, updatedAt: new Date() } as any)
         .where(eq(userSettings.userId, req.user!.id))
         .returning();
     } else {
-      [settings] = await db.insert(userSettings).values(validatedData as any).returning();
+      [settings] = await db().insert(userSettings).values(validatedData as any).returning();
     }
     
     res.json(settings);
@@ -217,7 +228,7 @@ router.post("/api/user-settings", requireAuth, async (req, res) => {
 // Favorite Recipes routes
 router.get("/api/favorite-recipes", requireAuth, async (req, res) => {
   try {
-    const recipes = await db.select().from(favoriteRecipes)
+    const recipes = await db().select().from(favoriteRecipes)
       .where(eq(favoriteRecipes.userId, req.user!.id))
       .orderBy(desc(favoriteRecipes.createdAt));
     res.json(recipes);
@@ -256,7 +267,7 @@ router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
       }
     };
     
-    const [recipe] = await db.insert(favoriteRecipes).values({
+    const [recipe] = await db().insert(favoriteRecipes).values({
       recipeName,
       recipeData: sanitizedRecipeData,
       userId: req.user!.id 
@@ -274,7 +285,7 @@ router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
 router.delete("/api/favorite-recipes/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.delete(favoriteRecipes)
+    await db().delete(favoriteRecipes)
       .where(and(eq(favoriteRecipes.id, id), eq(favoriteRecipes.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
@@ -285,7 +296,7 @@ router.delete("/api/favorite-recipes/:id", requireAuth, async (req, res) => {
 // Shopping List routes (for items to buy, separate from pantry)
 router.get("/api/shopping-list", requireAuth, async (req, res) => {
   try {
-    const items = await db.select().from(shoppingListItems)
+    const items = await db().select().from(shoppingListItems)
       .where(eq(shoppingListItems.userId, req.user!.id))
       .orderBy(desc(shoppingListItems.createdAt));
     res.json(items);
@@ -302,7 +313,7 @@ router.post("/api/shopping-list", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Item name is required" });
     }
     
-    const [item] = await db.insert(shoppingListItems).values({
+    const [item] = await db().insert(shoppingListItems).values({
       userId: req.user!.id,
       name,
       quantity: quantity || null,
@@ -325,7 +336,7 @@ router.patch("/api/shopping-list/:id", requireAuth, async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (quantity !== undefined) updateData.quantity = quantity;
     
-    const [item] = await db.update(shoppingListItems)
+    const [item] = await db().update(shoppingListItems)
       .set(updateData)
       .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)))
       .returning();
@@ -339,7 +350,7 @@ router.patch("/api/shopping-list/:id", requireAuth, async (req, res) => {
 router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.delete(shoppingListItems)
+    await db().delete(shoppingListItems)
       .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
@@ -350,7 +361,7 @@ router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
 // Recipe History routes
 router.get("/api/recipe-history", requireAuth, async (req, res) => {
   try {
-    const history = await db.select().from(recipeHistory)
+    const history = await db().select().from(recipeHistory)
       .where(eq(recipeHistory.userId, req.user!.id))
       .orderBy(desc(recipeHistory.madeAt));
     res.json(history);
@@ -367,7 +378,7 @@ router.post("/api/recipe-history", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Recipe name is required" });
     }
     
-    const [entry] = await db.insert(recipeHistory).values({
+    const [entry] = await db().insert(recipeHistory).values({
       userId: req.user!.id,
       recipeName,
       recipeData: recipeData || {},
@@ -390,7 +401,7 @@ router.patch("/api/recipe-history/:id", requireAuth, async (req, res) => {
     if (rating !== undefined) updateData.rating = rating;
     if (notes !== undefined) updateData.notes = notes;
     
-    const [entry] = await db.update(recipeHistory)
+    const [entry] = await db().update(recipeHistory)
       .set(updateData)
       .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)))
       .returning();
@@ -404,7 +415,7 @@ router.patch("/api/recipe-history/:id", requireAuth, async (req, res) => {
 router.delete("/api/recipe-history/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.delete(recipeHistory)
+    await db().delete(recipeHistory)
       .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
@@ -416,7 +427,7 @@ router.delete("/api/recipe-history/:id", requireAuth, async (req, res) => {
 router.get("/api/action-history", requireAuth, async (req, res) => {
   try {
     // Get last 20 undoable actions (not already undone)
-    const actions = await db.select().from(actionHistory)
+    const actions = await db().select().from(actionHistory)
       .where(and(
         eq(actionHistory.userId, req.user!.id),
         isNull(actionHistory.undoneAt)
@@ -432,7 +443,7 @@ router.get("/api/action-history", requireAuth, async (req, res) => {
 router.post("/api/undo", requireAuth, async (req, res) => {
   try {
     // Get the most recent undoable action
-    const [lastAction] = await db.select().from(actionHistory)
+    const [lastAction] = await db().select().from(actionHistory)
       .where(and(
         eq(actionHistory.userId, req.user!.id),
         isNull(actionHistory.undoneAt)
@@ -447,7 +458,7 @@ router.post("/api/undo", requireAuth, async (req, res) => {
     // Check if part of a group - if so, get all actions in that group
     let actionsToUndo = [lastAction];
     if (lastAction.actionGroupId) {
-      actionsToUndo = await db.select().from(actionHistory)
+      actionsToUndo = await db().select().from(actionHistory)
         .where(and(
           eq(actionHistory.userId, req.user!.id),
           eq(actionHistory.actionGroupId, lastAction.actionGroupId),
@@ -461,14 +472,14 @@ router.post("/api/undo", requireAuth, async (req, res) => {
     for (const action of actionsToUndo) {
       if (action.actionType === 'add_item' && action.entityType === 'pantry_item') {
         // Undo add = delete the item
-        await db.delete(pantryItems).where(eq(pantryItems.id, action.entityId));
+        await db().delete(pantryItems).where(eq(pantryItems.id, action.entityId));
         const itemData = action.newData as any;
         undoneItems.push(itemData?.name || 'item');
       } else if (action.actionType === 'delete_item' && action.entityType === 'pantry_item') {
         // Undo delete = restore the item
         const prevData = action.previousData as any;
         if (prevData) {
-          await db.insert(pantryItems).values({
+          await db().insert(pantryItems).values({
             id: action.entityId,
             userId: req.user!.id,
             name: prevData.name,
@@ -485,7 +496,7 @@ router.post("/api/undo", requireAuth, async (req, res) => {
         // Undo update = restore previous values
         const prevData = action.previousData as any;
         if (prevData) {
-          await db.update(pantryItems)
+          await db().update(pantryItems)
             .set({
               name: prevData.name,
               category: prevData.category,
@@ -500,14 +511,14 @@ router.post("/api/undo", requireAuth, async (req, res) => {
         }
       } else if (action.actionType === 'add_shopping' && action.entityType === 'shopping_list_item') {
         // Undo add to shopping list = delete
-        await db.delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
+        await db().delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
         const itemData = action.newData as any;
         undoneItems.push(itemData?.name || 'item');
       } else if (action.actionType === 'delete_shopping' && action.entityType === 'shopping_list_item') {
         // Undo delete from shopping list = restore
         const prevData = action.previousData as any;
         if (prevData) {
-          await db.insert(shoppingListItems).values({
+          await db().insert(shoppingListItems).values({
             id: action.entityId,
             userId: req.user!.id,
             name: prevData.name,
@@ -519,7 +530,7 @@ router.post("/api/undo", requireAuth, async (req, res) => {
       }
       
       // Mark action as undone
-      await db.update(actionHistory)
+      await db().update(actionHistory)
         .set({ undoneAt: new Date() })
         .where(eq(actionHistory.id, action.id));
     }
@@ -545,7 +556,7 @@ async function logAction(
   newData: any = null,
   actionGroupId: string | null = null
 ) {
-  await db.insert(actionHistory).values({
+  await db().insert(actionHistory).values({
     userId,
     actionType,
     entityType,
@@ -579,7 +590,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
       );
 
       if (normalizedCategory) {
-        await db.insert(pantryItems).values({
+        await db().insert(pantryItems).values({
           userId: req.user!.id,
           name: pending_item,
           category: normalizedCategory as any,
@@ -601,7 +612,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
     // SMART CLASSIFICATION: Use intelligent categorization for pending items
     if (pending_item) {
       // Fetch current pantry items first to check for duplicates
-      const existingPantryItems = await db.select().from(pantryItems)
+      const existingPantryItems = await db().select().from(pantryItems)
         .where(eq(pantryItems.userId, req.user!.id));
       
       // Check for duplicate
@@ -622,7 +633,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
       
       // If we can classify it automatically, do so
       if (classification.category && !classification.isAmbiguous) {
-        await db.insert(pantryItems).values({
+        await db().insert(pantryItems).values({
           userId: req.user!.id,
           name: pending_item,
           category: classification.category as any,
@@ -653,7 +664,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
     }
 
     // Fetch current pantry items
-    const currentPantryItems = await db.select().from(pantryItems)
+    const currentPantryItems = await db().select().from(pantryItems)
       .where(eq(pantryItems.userId, req.user!.id));
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -949,7 +960,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
           }
         }
 
-        const [newItem] = await db.insert(pantryItems).values({
+        const [newItem] = await db().insert(pantryItems).values({
           userId: req.user!.id,
           name: item.name,
           category: category as any,
@@ -985,7 +996,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
         if (!item.name) continue;
 
         // Find existing item by name (case-insensitive)
-        const existingItems = await db.select().from(pantryItems)
+        const existingItems = await db().select().from(pantryItems)
           .where(eq(pantryItems.userId, req.user!.id));
         
         const matchingItem = existingItems.find(
@@ -993,7 +1004,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
         );
         
         if (matchingItem) {
-          await db.update(pantryItems)
+          await db().update(pantryItems)
             .set({ 
               isLow: item.is_low ?? matchingItem.isLow,
               quantity: item.quantity || matchingItem.quantity,
@@ -1009,7 +1020,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       for (const item of sageResponse.payload.items) {
         if (!item.name) continue;
 
-        const [newItem] = await db.insert(shoppingListItems).values({
+        const [newItem] = await db().insert(shoppingListItems).values({
           userId: req.user!.id,
           name: item.name,
           quantity: item.quantity || null,
@@ -1031,7 +1042,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
     // Handle undo action from voice command
     if (sageResponse.action === "undo") {
       // Get the most recent undoable action
-      const [lastAction] = await db.select().from(actionHistory)
+      const [lastAction] = await db().select().from(actionHistory)
         .where(and(
           eq(actionHistory.userId, req.user!.id),
           isNull(actionHistory.undoneAt)
@@ -1045,7 +1056,7 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
         // Get all actions in group if applicable
         let actionsToUndo = [lastAction];
         if (lastAction.actionGroupId) {
-          actionsToUndo = await db.select().from(actionHistory)
+          actionsToUndo = await db().select().from(actionHistory)
             .where(and(
               eq(actionHistory.userId, req.user!.id),
               eq(actionHistory.actionGroupId, lastAction.actionGroupId),
@@ -1058,16 +1069,16 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
         
         for (const action of actionsToUndo) {
           if (action.actionType === 'add_item' && action.entityType === 'pantry_item') {
-            await db.delete(pantryItems).where(eq(pantryItems.id, action.entityId));
+            await db().delete(pantryItems).where(eq(pantryItems.id, action.entityId));
             const itemData = action.newData as any;
             undoneItems.push(itemData?.name || 'item');
           } else if (action.actionType === 'add_shopping' && action.entityType === 'shopping_list_item') {
-            await db.delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
+            await db().delete(shoppingListItems).where(eq(shoppingListItems.id, action.entityId));
             const itemData = action.newData as any;
             undoneItems.push(itemData?.name || 'item');
           }
           
-          await db.update(actionHistory)
+          await db().update(actionHistory)
             .set({ undoneAt: new Date() })
             .where(eq(actionHistory.id, action.id));
         }

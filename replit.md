@@ -102,6 +102,13 @@ The following API keys are needed for full functionality:
 ### sessions
 - Active user sessions
 
+## Recent Changes (November 26, 2025)
+- ✅ Fixed deployment health check timeout with lazy database initialization
+- ✅ Server now starts listening immediately before loading routes/database
+- ✅ Added /health endpoint for deployment health checks
+- ✅ Database connects lazily on first API request (not on module import)
+- ✅ Deployment target: Reserved VM for stateful database connections
+
 ## Recent Changes (November 25, 2025)
 - ✅ Migrated from Supabase to PostgreSQL with Drizzle ORM
 - ✅ Replaced Supabase Auth with cookie-based authentication
@@ -120,11 +127,18 @@ The following API keys are needed for full functionality:
 - ✅ Added "Suggest Meals" button for click-based meal suggestions (alternative to voice)
 - ✅ Added "Cook This" button to save selected recipes to history tab
 
+## Deployment Configuration
+- **Target**: Reserved VM (for stateful database connections)
+- **Build**: `bun run build` (compiles TypeScript to dist/)
+- **Run**: `bun run start` (NODE_ENV=production node dist/server/index.js)
+- **Port**: 5000 → 80 (external)
+- **Health Check**: GET /health returns {"status":"ok"} immediately
+
 ## Next Steps
-1. Request API keys from user (LOVABLE_API_KEY, OPENAI_API_KEY)
-2. Test voice assistant functionality
-3. Test text-to-speech features
-4. Verify all features work end-to-end
+1. Deploy the application (click Publish button)
+2. Request API keys from user if needed (LOVABLE_API_KEY, OPENAI_API_KEY)
+3. Test voice assistant functionality
+4. Test text-to-speech features
 
 ## Development
 ```bash

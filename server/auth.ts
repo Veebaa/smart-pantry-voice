@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { db } from "./db.js";
+import { getDb } from "./db.js";
 import { users, sessions } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -23,6 +23,7 @@ export function generateSessionToken(): string {
 export async function createSession(userId: string) {
   const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_DURATION);
+  const db = getDb();
 
   const [session] = await db.insert(sessions).values({
     userId,
@@ -34,6 +35,7 @@ export async function createSession(userId: string) {
 }
 
 export async function getSessionUser(token: string) {
+  const db = getDb();
   const [session] = await db
     .select()
     .from(sessions)
@@ -54,7 +56,6 @@ export async function getSessionUser(token: string) {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  // Try Authorization header first (Bearer token), then fall back to cookie
   const authHeader = req.headers.authorization;
   let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   
@@ -75,7 +76,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-// Extend Express Request type
 declare global {
   namespace Express {
     interface Request {

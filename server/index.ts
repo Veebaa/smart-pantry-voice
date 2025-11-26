@@ -4,21 +4,12 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
 
-// Log startup information immediately - BEFORE any database imports
 console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
-
-// Validate required environment variables BEFORE importing database-dependent modules
-if (!process.env.DATABASE_URL) {
-  console.error("[startup] FATAL: DATABASE_URL environment variable is not set!");
-  console.error("[startup] Please configure DATABASE_URL in your deployment secrets.");
-  process.exit(1);
-}
 
 const app = express();
 const server = createServer(app);
 
-// Trust proxy for cookies to work behind Replit's proxy
 app.set("trust proxy", 1);
 
 app.use(cors({
@@ -28,6 +19,13 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+let routesInitialized = false;
+let routesInitializing = false;
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok", routesReady: routesInitialized });
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -59,22 +57,38 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+async function initializeRoutes() {
+  if (routesInitialized || routesInitializing) return;
+  routesInitializing = true;
+  
   try {
-    // Dynamically import routes AFTER env var validation
     console.log("[startup] Loading routes module...");
     const { default: routes } = await import("./routes.js");
-    console.log("[startup] Initializing routes...");
+    console.log("[startup] Routes loaded successfully");
     app.use(routes);
+    routesInitialized = true;
+    console.log("[startup] Routes initialized");
+  } catch (error) {
+    console.error("[startup] Failed to initialize routes:", error);
+    routesInitializing = false;
+    throw error;
+  }
+}
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+  console.error("[error]", err);
+});
 
-      res.status(status).json({ message });
-      console.error("[error]", err);
-    });
+const PORT = 5000;
 
+server.listen(PORT, "0.0.0.0", async () => {
+  console.log(`[startup] Server listening on 0.0.0.0:${PORT}`);
+  log(`Server running on port ${PORT}`);
+
+  try {
     if (process.env.NODE_ENV !== "production") {
       console.log("[startup] Setting up Vite for development...");
       await setupVite(app, server);
@@ -83,13 +97,9 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    const PORT = 5000;
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`[startup] Server listening on 0.0.0.0:${PORT}`);
-      log(`Server running on port ${PORT}`);
-    });
+    await initializeRoutes();
+    console.log("[startup] Application fully initialized");
   } catch (error) {
-    console.error("[startup] Failed to start server:", error);
-    process.exit(1);
+    console.error("[startup] Failed during post-listen initialization:", error);
   }
-})();
+});
