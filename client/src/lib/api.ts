@@ -37,6 +37,13 @@ export async function apiRequest(method: string, endpoint: string, data?: any) {
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
 
+  // Check content type to detect HTML responses (usually means routing issue)
+  const contentType = response.headers.get("content-type");
+  if (contentType && !contentType.includes("application/json")) {
+    console.error(`API returned non-JSON response for ${endpoint}:`, contentType);
+    throw new Error("Server returned an unexpected response. Please refresh the page.");
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Request failed" }));
     throw new Error(error.error || `HTTP error! status: ${response.status}`);
@@ -55,6 +62,13 @@ async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
       ...options.headers,
     },
   });
+
+  // Check content type to detect HTML responses (usually means routing issue)
+  const contentType = response.headers.get("content-type");
+  if (contentType && !contentType.includes("application/json")) {
+    console.error(`API returned non-JSON response for ${endpoint}:`, contentType);
+    throw new Error("Server returned an unexpected response. Please refresh the page.");
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Request failed" }));
