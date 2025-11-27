@@ -102,6 +102,14 @@ The following API keys are needed for full functionality:
 ### sessions
 - Active user sessions
 
+## Recent Changes (November 27, 2025)
+- ✅ Fixed landing page logo where italic "g" was cut off (added pb-3 padding and line-height)
+- ✅ Implemented comprehensive testing infrastructure
+- ✅ Set up Vitest for unit tests with 28 passing tests covering auth validation and item classifier
+- ✅ Created frontend component test files for Auth, Landing, and MealSuggestions
+- ✅ Configured Playwright for E2E testing with auth flows and navigation scenarios
+- ✅ Added test scripts: test, test:watch, test:coverage, test:client, test:e2e, test:e2e:ui
+
 ## Recent Changes (November 26, 2025)
 - ✅ Fixed deployment health check timeout with lazy database initialization
 - ✅ Server now starts listening immediately before loading routes/database
@@ -159,6 +167,45 @@ bun run db:push
 
 # View database in Drizzle Studio
 bun run db:studio
+```
+
+## Testing
+```bash
+# Run all unit tests
+bun run test
+
+# Run tests in watch mode
+bun run test:watch
+
+# Run tests with coverage
+bun run test:coverage
+
+# Run frontend component tests
+bun run test:client
+
+# Run E2E tests (requires server running)
+bun run test:e2e
+
+# Run E2E tests with UI
+bun run test:e2e:ui
+```
+
+### Test Structure
+```
+/tests
+  - unit/server/           # Backend unit tests
+    - auth.test.ts         # Password/email validation, session tokens
+    - itemClassifier.test.ts # Smart categorization logic
+  - e2e/                   # Playwright E2E tests
+    - auth.spec.ts         # Authentication flow tests
+    - navigation.spec.ts   # Landing page and navigation tests
+  - setup.ts               # Server test setup
+  - client-setup.ts        # Frontend test setup
+
+/client/src/__tests__      # Frontend component tests
+  - Auth.test.tsx          # Auth component tests
+  - Landing.test.tsx       # Landing page tests
+  - MealSuggestions.test.tsx # Meal suggestions tests
 ```
 
 ## Notes
