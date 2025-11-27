@@ -10,6 +10,9 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     exclude: ['tests/e2e/**/*', 'node_modules'],
     setupFiles: ['./tests/setup.ts'],
+    reporters: process.env.GITHUB_ACTIONS 
+      ? ['verbose', 'github-actions'] 
+      : ['verbose'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

@@ -109,6 +109,8 @@ The following API keys are needed for full functionality:
 - ✅ Created frontend component test files for Auth, Landing, and MealSuggestions
 - ✅ Configured Playwright for E2E testing with auth flows and navigation scenarios
 - ✅ Added test scripts: test, test:watch, test:coverage, test:client, test:e2e, test:e2e:ui
+- ✅ Added GitHub Actions CI pipeline (.github/workflows/ci.yml)
+- ✅ CI includes: unit tests, frontend tests, E2E tests, linting, type checking, and build verification
 
 ## Recent Changes (November 26, 2025)
 - ✅ Fixed deployment health check timeout with lazy database initialization
@@ -207,6 +209,24 @@ bun run test:e2e:ui
   - Landing.test.tsx       # Landing page tests
   - MealSuggestions.test.tsx # Meal suggestions tests
 ```
+
+## CI/CD with GitHub Actions
+The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on:
+- Push to main/master branches
+- Pull requests to main/master branches
+
+**Jobs:**
+1. **unit-tests** - Runs Vitest unit tests with coverage
+2. **frontend-tests** - Runs frontend component tests
+3. **e2e-tests** - Runs Playwright E2E tests
+4. **lint** - Runs ESLint
+5. **typecheck** - Runs TypeScript type checking
+6. **build** - Builds the production application
+
+**Artifacts:**
+- Coverage reports (7 days retention)
+- Playwright HTML reports (30 days retention)
+- Playwright screenshots on failure (7 days retention)
 
 ## Notes
 - The voice assistant uses the Lovable AI Gateway (Gemini 2.5 Flash model)
