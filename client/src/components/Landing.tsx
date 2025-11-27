@@ -35,13 +35,14 @@ export const Landing = () => {
             <span className="text-sm font-medium text-primary">Voice-enabled</span>
           </div>
           
-          <div className="flex items-center justify-center gap-4 mb-2">
+          <div className="flex items-center justify-center gap-4 mb-2 overflow-visible">
             <Leaf className="h-14 w-14 md:h-16 md:w-16 text-primary" strokeWidth={1.5} />
-            <h1 className="text-5xl md:text-6xl font-bold italic" style={{
+            <h1 className="text-5xl md:text-6xl font-bold italic pb-1" style={{
               background: 'linear-gradient(135deg, hsl(var(--sage-light)), hsl(var(--sage-medium)), hsl(var(--sage-dark)))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
+              backgroundClip: 'text',
+              lineHeight: '1.3'
             }}>
               Sage
             </h1>
