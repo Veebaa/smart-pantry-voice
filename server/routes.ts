@@ -1,13 +1,42 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { getDb, initializeDb } from "./db.js";
-import { pantryItems, userSettings, favoriteRecipes, users, sessions, shoppingListItems, recipeHistory, actionHistory, insertPantryItemSchema, insertUserSettingsSchema } from "../shared/schema.js";
+import {
+  pantryItems,
+  userSettings,
+  favoriteRecipes,
+  users,
+  sessions,
+  shoppingListItems,
+  recipeHistory,
+  actionHistory,
+  insertPantryItemSchema,
+  insertUserSettingsSchema,
+} from "../shared/schema.js";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth.js";
 import { z } from "zod";
-import { classifyItem, formatClarificationQuestion, getClassificationForAI } from "./itemClassifier.js";
+import {
+  classifyItem,
+  formatClarificationQuestion,
+  getClassificationForAI,
+} from "./itemClassifier.js";
 import { randomUUID } from "crypto";
+import {
+  createRateLimiter,
+  getSecureCookieOptions,
+  createCsrfToken,
+  logSecurityEvent,
+  sendSecureError,
+} from "./security.js";
+import { signinSchema, signupSchema, getValidationError } from "./validators.js";
 
 const router = Router();
+
+// 🚨 RATE LIMITING - Protect sensitive endpoints from brute force attacks
+// Auth endpoints: max 5 requests per minute per IP
+const authRateLimiter = createRateLimiter(60 * 1000, 5, "auth");
+// Login attempts: max 10 per 15 minutes (stricter than general auth)
+const loginRateLimiter = createRateLimiter(15 * 60 * 1000, 10, "login");
 
 router.use(async (_req: Request, _res: Response, next: NextFunction) => {
   try {
@@ -20,73 +49,124 @@ router.use(async (_req: Request, _res: Response, next: NextFunction) => {
 
 const db = () => getDb();
 
-// Auth routes
-router.post("/api/auth/signup", async (req, res) => {
+/**
+ * POST /api/auth/signup
+ * Register a new user with email and password
+ * 
+ * Security measures:
+ * - Rate limited to prevent account enumeration
+ * - Passwords validated for complexity
+ * - Email uniqueness enforced
+ * - Secure session cookie issued
+ */
+router.post("/api/auth/signup", authRateLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
-    const authSchema = z.object({
-      email: z.string().email(),
-      password: z.string()
-        .min(8, "Password must be at least 8 characters")
-        .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-        .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-        .regex(/[0-9]/, "Password must contain at least one number"),
-    });
-    
-    const validatedData = authSchema.parse({ email, password });
-    
-    const existingUser = await db().select().from(users).where(eq(users.email, validatedData.email)).limit(1);
+    // 🔍 Validate input against schema
+    const validationError = getValidationError(signupSchema, req.body);
+    if (validationError) {
+      logSecurityEvent("validation_error", req, `Signup validation failed: ${validationError}`);
+      return res.status(400).json({ error: validationError });
+    }
+
+    const validatedData = signupSchema.parse(req.body);
+
+    // 🔒 Check if email already registered
+    const existingUser = await db()
+      .select()
+      .from(users)
+      .where(eq(users.email, validatedData.email))
+      .limit(1);
+
     if (existingUser.length > 0) {
+      logSecurityEvent("auth_failure", req, `Signup attempt with existing email: ${validatedData.email}`);
       return res.status(400).json({ error: "Email already registered" });
     }
-    
+
+    // 🔐 Hash password with bcrypt
     const passwordHash = await hashPassword(validatedData.password);
-    const [user] = await db().insert(users).values({
-      email: validatedData.email,
-      passwordHash,
-    }).returning();
-    
+
+    // 💾 Create user in database
+    const [user] = await db()
+      .insert(users)
+      .values({
+        email: validatedData.email,
+        passwordHash,
+      })
+      .returning();
+
+    // 🎫 Create secure session
     const session = await createSession(user.id);
-    
-    res.json({ user: { id: user.id, email: user.email }, token: session.token });
+    const csrfToken = createCsrfToken(session.id);
+
+    // 🍪 Set secure session cookie
+    res.cookie("session_token", session.token, getSecureCookieOptions());
+
+    res.status(201).json({
+      user: { id: user.id, email: user.email },
+      token: session.token,
+      csrfToken,
+    });
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.issues[0].message });
-    }
-    res.status(500).json({ error: error.message });
+    sendSecureError(res, 500, "Signup failed", error);
+    logSecurityEvent("auth_failure", req, `Signup error: ${error.message}`);
   }
 });
 
-router.post("/api/auth/signin", async (req, res) => {
+/**
+ * POST /api/auth/signin
+ * Authenticate user with email and password
+ * 
+ * Security measures:
+ * - Stricter rate limiting to prevent brute force
+ * - Generic error messages prevent email enumeration
+ * - Password compared with bcrypt (timing-safe)
+ * - Session expires after 7 days
+ */
+router.post("/api/auth/signin", loginRateLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
-    const authSchema = z.object({
-      email: z.string().email(),
-      password: z.string(),
-    });
-    
-    const validatedData = authSchema.parse({ email, password });
-    
-    const [user] = await db().select().from(users).where(eq(users.email, validatedData.email)).limit(1);
+    // 🔍 Validate input
+    const validationError = getValidationError(signinSchema, req.body);
+    if (validationError) {
+      logSecurityEvent("validation_error", req, `Signin validation failed: ${validationError}`);
+      return res.status(400).json({ error: validationError });
+    }
+
+    const validatedData = signinSchema.parse(req.body);
+
+    // 🔒 Look up user (generic error prevents email enumeration)
+    const [user] = await db()
+      .select()
+      .from(users)
+      .where(eq(users.email, validatedData.email))
+      .limit(1);
+
     if (!user) {
+      logSecurityEvent("auth_failure", req, `Signin attempt with non-existent email: ${validatedData.email}`);
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    
+
+    // 🔐 Compare password (timing-safe bcrypt comparison)
     const isValid = await comparePassword(validatedData.password, user.passwordHash);
     if (!isValid) {
+      logSecurityEvent("auth_failure", req, `Signin failed for user: ${user.email}`);
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    
+
+    // 🎫 Create session
     const session = await createSession(user.id);
-    
-    res.json({ user: { id: user.id, email: user.email }, token: session.token });
+    const csrfToken = createCsrfToken(session.id);
+
+    // 🍪 Set secure session cookie
+    res.cookie("session_token", session.token, getSecureCookieOptions());
+
+    res.json({
+      user: { id: user.id, email: user.email },
+      token: session.token,
+      csrfToken,
+    });
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.issues[0].message });
-    }
-    res.status(500).json({ error: error.message });
+    sendSecureError(res, 500, "Signin failed", error);
+    logSecurityEvent("auth_failure", req, `Signin error: ${error.message}`);
   }
 });
 

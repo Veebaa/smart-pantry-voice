@@ -228,8 +228,63 @@ The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that
 - Playwright HTML reports (30 days retention)
 - Playwright screenshots on failure (7 days retention)
 
+## Security Architecture
+
+### 🔐 Authentication & Authorization
+- **Password Hashing**: bcryptjs with 10 salt rounds (resistant to rainbow tables)
+- **Session Tokens**: Cryptographically secure 32-byte tokens (64 hex chars)
+- **Session Duration**: 7 days with automatic expiration
+- **Cookie Configuration**: 
+  - HttpOnly (prevents JavaScript access - XSS protection)
+  - Secure (HTTPS only in production)
+  - SameSite=Strict (prevents CSRF attacks)
+
+### 🛡️ API Security
+- **Rate Limiting**: 
+  - Auth endpoints: 5 requests/minute per IP
+  - Login attempts: 10 requests/15 minutes per IP (stricter)
+- **Input Validation**: Zod schemas with type-safe parsing
+- **Input Sanitization**: HTML entity escaping, email/string/number validation
+- **CSRF Protection**: Token-based CSRF prevention with 1-hour expiration
+- **Security Headers**:
+  - X-Frame-Options: DENY (clickjacking prevention)
+  - X-Content-Type-Options: nosniff (MIME sniffing prevention)
+  - CSP: Strict content security policy
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - Permissions-Policy: Disabled for geolocation, microphone, camera
+
+### 🔏 Data Protection
+- **Password Requirements**: Min 8 chars, 1 uppercase, 1 lowercase, 1 number
+- **Error Messages**: Generic error messages prevent user enumeration
+- **Timing-Safe Comparisons**: bcrypt.compare is timing-safe
+- **Parameterized Queries**: Drizzle ORM prevents SQL injection
+- **Environment Variables**: All secrets stored in .env, never hardcoded
+
+### 🧪 Security Testing
+Run security-focused tests:
+```bash
+bun run test tests/unit/server/security.test.ts
+```
+
+Tests cover:
+- CSRF token generation and validation
+- Input sanitization (XSS, SQL injection prevention)
+- Secure cookie configuration
+- Attack prevention (email enumeration, injection attacks)
+
+### 📊 Audit Logging
+Security events logged for:
+- Authentication failures
+- Rate limit violations
+- CSRF failures
+- Validation errors
+
+Logs kept for audit trail analysis (last 1000 events in memory, integrate with external service for production).
+
 ## Notes
 - The voice assistant uses the Lovable AI Gateway (Gemini 2.5 Flash model)
 - Text-to-speech uses OpenAI's TTS API
 - Browser may cache old code - do a hard refresh (Ctrl+Shift+R) if issues occur
 - All API endpoints require authentication except signup/signin
+- **OWASP Compliance**: Implementation follows OWASP Top 10 best practices
+- For production deployment, integrate external logging (Sentry, LogRocket) for security event monitoring

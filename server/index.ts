@@ -6,6 +6,10 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import {
+  securityHeadersMiddleware,
+  startCsrfTokenCleanup,
+} from "./security.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,15 +20,24 @@ console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT
 const app = express();
 const server = createServer(app);
 
+// 🔒 SECURITY CONFIGURATION
 app.set("trust proxy", 1);
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+// 🛡️ Apply security headers to all responses (OWASP best practices)
+app.use(securityHeadersMiddleware);
+
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// 🔄 Start CSRF token cleanup on server start
+startCsrfTokenCleanup();
 
 let routesInitialized = false;
 let routesInitializing = false;
