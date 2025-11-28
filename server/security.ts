@@ -69,14 +69,30 @@ export function createRateLimiter(
 
 /**
  * Get client IP address, respecting X-Forwarded-For and proxy settings
+ * Handles both string and string[] header values
  */
 function getClientIp(req: Request): string {
-  return (
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() ||
-    req.headers["cf-connecting-ip"] ||
-    req.socket.remoteAddress ||
-    "unknown"
-  );
+  // Handle x-forwarded-for header (can be string or string[])
+  const xForwardedFor = req.headers["x-forwarded-for"];
+  if (xForwardedFor) {
+    const ip = Array.isArray(xForwardedFor)
+      ? xForwardedFor[0]
+      : xForwardedFor.split(",")[0];
+    return ip.trim();
+  }
+
+  // Fallback to Cloudflare header
+  const cfConnectingIp = req.headers["cf-connecting-ip"];
+  if (cfConnectingIp) {
+    return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+  }
+
+  // Fallback to socket address
+  if (req.socket.remoteAddress) {
+    return req.socket.remoteAddress;
+  }
+
+  return "unknown";
 }
 
 // ============================================================================
