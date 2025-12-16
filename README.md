@@ -65,9 +65,8 @@ See [Security Architecture](#security-architecture-1) for detailed implementatio
 
 ## Prerequisites
 
-- **Node.js** 18+ or **Bun** 1.0+
+- **Bun** 1.0+ (package manager and runtime)
 - **PostgreSQL** 14+
-- **npm** or **bun** package manager
 - API keys:
   - `LOVABLE_API_KEY` - For AI meal suggestions (Gemini 2.5 Flash)
   - `OPENAI_API_KEY` - For text-to-speech functionality
@@ -257,6 +256,8 @@ PATCH /api/user-settings
 
 ### Available Scripts
 
+All scripts use **Bun**:
+
 ```bash
 # Development
 bun run dev                 # Start dev server with hot reload
@@ -279,6 +280,8 @@ bun run db:studio         # Open Drizzle Studio
 bun run lint              # ESLint check
 bun run type-check        # TypeScript check
 ```
+
+**Note**: This project uses **Bun** exclusively. Only `bun.lock` and `bun.lockb` are committed. Do not use npm or yarn.
 
 ### Code Style
 
