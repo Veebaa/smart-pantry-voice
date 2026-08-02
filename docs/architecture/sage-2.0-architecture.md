@@ -60,7 +60,7 @@ Sage should become:
 
 - AI-first
 - Conversation-first
-- Voice-first (without excluding other interfaces)
+- Conversation-first, with voice as a first-class interface.
 - Cloud-native
 - Secure by default
 - Highly testable

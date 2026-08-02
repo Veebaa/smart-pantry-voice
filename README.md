@@ -4,16 +4,52 @@
 [![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.18-000000.svg)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+
+
+## Project Status
+
+> **🚧 Sage is currently undergoing the Sage 2.0 modernisation.**
+
+The existing application is fully functional and continues to be maintained while an incremental architectural migration is underway.
+
+Sage 2.0 introduces a new architecture centred around:
+
+- AI as an orchestrator rather than a source of business logic
+- Deterministic business capabilities
+- Application-managed conversation state
+- Clear architectural boundaries
+- Incremental, low-risk refactoring
+
+The architectural design phase is complete and documented in:
+
+```
+docs/
+├── architecture/
+└── engineering/
+```
+
+Development is now focused on implementing the Sage 2.0 architecture through the migration plan.
+
+## Why Sage?
+
+Many AI applications embed business logic directly inside prompts, making them difficult to test, maintain, and evolve.
+
+Sage takes a different approach.
+
+AI is responsible for understanding user intent, while the application owns business logic, conversation management, and data integrity.
+
+This separation creates a more maintainable, reliable, and extensible conversational application.
 
 ## Overview
 
-Sage is a sophisticated voice-controlled pantry management application that leverages AI to provide intelligent meal suggestions based on your available ingredients. Built with modern security practices and a focus on user experience, Sage helps you manage your food inventory, reduce waste, and discover recipes from what you already have.
+Sage is an AI-powered pantry management assistant that combines conversational AI with deterministic business capabilities to help users manage food inventory, reduce waste, and discover meals using ingredients they already have.
+
+Built with modern software engineering practices, Sage emphasises maintainability, security, and long-term architectural quality alongside a natural conversational user experience.
 
 ### Key Capabilities
 
 - **Voice-Controlled Inventory**: Add and manage pantry items using natural voice commands
-- **AI Meal Suggestions**: Get personalized recipe recommendations powered by Gemini 2.5 Flash
+- **AI Meal Suggestions**: Get personalized recipe recommendations powered by conversational AI
 - **Smart Categorization**: Automatic organization of items into fridge, freezer, cupboard, and pantry categories
 - **Expiration Tracking**: Monitor expiring items with visual alerts and thresholds
 - **Shopping Lists**: Auto-generated shopping lists from suggested recipes
@@ -21,7 +57,29 @@ Sage is a sophisticated voice-controlled pantry management application that leve
 - **Dietary Preferences**: Support for vegetarian, vegan, gluten-free, and other dietary restrictions
 - **Text-to-Speech**: Natural audio responses from the AI assistant
 
+## Project Goals
+
+Sage aims to demonstrate how conversational AI applications can be designed using clear architectural boundaries rather than embedding business logic inside AI prompts.
+
+The project prioritises:
+
+- maintainability
+- deterministic business behaviour
+- long-term architecture
+- incremental modernisation
+- practical AI integration
+
+The architecture is intentionally designed to remain independent of any specific AI provider or user interface.
+
 ## Technology Stack
+
+### Architecture
+
+- AI Orchestrator
+- Capability Architecture
+- Conversation Architecture
+- Deterministic Business Capabilities
+- Incremental Migration Strategy
 
 ### Frontend
 - **React** 18.3 - UI framework with TypeScript
@@ -67,9 +125,7 @@ See [Security Architecture](#security-architecture-1) for detailed implementatio
 
 - **Bun** 1.0+ (package manager and runtime)
 - **PostgreSQL** 14+
-- API keys:
-  - `LOVABLE_API_KEY` - For AI meal suggestions (Gemini 2.5 Flash)
-  - `OPENAI_API_KEY` - For text-to-speech functionality
+
 
 ## Installation
 
@@ -77,8 +133,8 @@ See [Security Architecture](#security-architecture-1) for detailed implementatio
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sage.git
-cd sage
+git clone https://github.com/Veebaa/smart-pantry-voice.git
+cd smart-pantry-voice
 
 # Install dependencies
 bun install
@@ -107,150 +163,37 @@ docker run -p 5000:5000 \
   sage
 ```
 
-## Project Structure
+## Documentation
 
-```
-sage/
-├── client/
-│   └── src/
-│       ├── components/          # React components
-│       │   ├── ui/              # shadcn/ui components
-│       │   ├── Landing.tsx       # Landing page
-│       │   ├── Auth.tsx          # Authentication flow
-│       │   └── ...
-│       ├── pages/               # Page components
-│       ├── contexts/            # React contexts (UserContext)
-│       ├── lib/                 # Utilities
-│       │   ├── queryClient.ts    # React Query setup
-│       │   └── api.ts            # API client
-│       ├── hooks/               # Custom React hooks
-│       └── App.tsx              # Root component
-│
-├── server/
-│   ├── index.ts                 # Express app setup
-│   ├── routes.ts                # API endpoints
-│   ├── auth.ts                  # Authentication utilities
-│   ├── security.ts              # Security middleware
-│   ├── validators.ts            # Input validation schemas
-│   ├── itemClassifier.ts        # AI item categorization
-│   ├── db.ts                    # Database connection
-│   └── vite.ts                  # Vite integration
-│
-├── shared/
-│   └── schema.ts                # Database schema & types
-│
-├── tests/
-│   ├── unit/
-│   │   └── server/              # Backend unit tests
-│   ├── e2e/                     # Playwright E2E tests
-│   └── setup.ts                 # Test configuration
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml               # GitHub Actions CI/CD
-│
-├── vite.config.ts               # Vite configuration
-├── tsconfig.json                # TypeScript configuration
-├── package.json                 # Dependencies
-└── README.md                    # This file
-```
+The project documentation is organised into two areas.
 
-## API Documentation
+### Architecture
 
-### Authentication Endpoints
+Defines the long-term design of Sage.
 
-#### Register
-```http
-POST /api/auth/signup
-Content-Type: application/json
+- Architecture Vision
+- AI Orchestrator
+- Capability Architecture
+- Conversation Architecture
+- Application Architecture
+- Glossary
 
-{
-  "email": "user@example.com",
-  "password": "SecurePass123",
-  "confirmPassword": "SecurePass123"
-}
-```
+### Engineering
 
-#### Login
-```http
-POST /api/auth/signin
-Content-Type: application/json
+Defines how the architecture is implemented.
 
-{
-  "email": "user@example.com",
-  "password": "SecurePass123"
-}
-```
+- Developer Guide
+- Migration Plan
 
-#### Logout
-```http
-POST /api/auth/signout
-```
+Contributors should familiarise themselves with these documents before making architectural or structural changes.
 
-#### Get Current User
-```http
-GET /api/auth/user
-Authorization: Bearer <session_token>
-```
+## API
 
-### Pantry Items Endpoints
+The HTTP API is currently undergoing architectural modernisation as part of Sage 2.0.
 
-#### Get All Items
-```http
-GET /api/pantry-items
-Authorization: Bearer <session_token>
-```
+Endpoint documentation will be published separately once the migration is complete.
 
-#### Add Item
-```http
-POST /api/pantry-items
-Authorization: Bearer <session_token>
-Content-Type: application/json
-
-{
-  "name": "Milk",
-  "quantity": 1,
-  "unit": "l",
-  "category": "fridge",
-  "expiryDate": "2024-12-31T23:59:59Z",
-  "notes": "Whole milk"
-}
-```
-
-#### Update Item
-```http
-PATCH /api/pantry-items/:id
-Authorization: Bearer <session_token>
-Content-Type: application/json
-
-{
-  "quantity": 0.5,
-  "notes": "Half used"
-}
-```
-
-#### Delete Item
-```http
-DELETE /api/pantry-items/:id
-Authorization: Bearer <session_token>
-```
-
-### Meal Suggestions
-```http
-POST /api/pantry-assistant
-Authorization: Bearer <session_token>
-Content-Type: application/json
-
-{
-  "userMessage": "What can I make with milk, eggs, and flour?"
-}
-```
-
-### User Settings
-```http
-GET /api/user-settings
-PATCH /api/user-settings
-```
+During the migration, the application remains fully functional, but endpoint contracts may evolve as architectural boundaries are introduced.
 
 ## Development
 
@@ -318,21 +261,11 @@ Coverage reports are generated in the `coverage/` directory.
 
 ## Deployment
 
-### Deploy to Replit
+Deployment documentation will evolve alongside the Sage 2.0 migration.
 
-1. Push code to GitHub
-2. Connect repository to Replit
-3. Click "Publish" button
+The target deployment architecture is documented within the engineering documentation.
 
-### Deploy to Production
-
-```bash
-# Build
-bun run build
-
-# Deploy built files and run production server
-NODE_ENV=production bun run start
-```
+Current deployment instructions remain applicable until the migration is complete.
 
 ### Environment Variables (Production)
 
@@ -377,9 +310,28 @@ bun run test tests/unit/server/security.test.ts
 
 ### Reporting Security Issues
 
-Please report security vulnerabilities to [security contact]. Do not open public issues for security problems.
+Please report security vulnerabilities privately via GitHub or by contacting the project maintainer directly.
+
+## Architecture Philosophy
+
+Sage is built around a small number of long-term architectural principles.
+
+- AI understands intent but does not contain business logic.
+- Business capabilities remain deterministic and reusable.
+- Conversation state belongs to the application rather than the AI model.
+- Clear architectural boundaries improve maintainability.
+- Simplicity is preferred over unnecessary abstraction.
+
+These principles guide all future development and refactoring.
 
 ## Contributing
+
+Before contributing significant architectural or structural changes, please read:
+
+- docs/architecture/
+- docs/engineering/developer-guide.md
+
+This helps ensure all contributions remain consistent with the Sage architecture.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -426,35 +378,26 @@ Please report security vulnerabilities to [security contact]. Do not open public
 lsof -ti:5000 | xargs kill -9
 ```
 
-## Roadmap
+## Sage 2.0 Migration Progress
 
-- [ ] Meal plan generation (weekly/monthly)
-- [ ] Nutrition tracking
-- [ ] Recipe difficulty ratings
-- [ ] Multi-language support
-- [ ] Mobile app (React Native)
-- [ ] Integration with grocery delivery services
+| Phase | Status |
+|--------|--------|
+| Architecture & Documentation | ✅ Complete |
+| Project Simplification | ⏳ Planned |
+| Capability Foundation | ⏳ Planned |
+| Conversation Architecture | ⏳ Planned |
+| Application Boundaries | ⏳ Planned |
+| Persistence Boundary | ⏳ Planned |
+| Infrastructure Separation | ⏳ Planned |
+| Testing & Validation | ⏳ Planned |
 
-## License
+The migration is being carried out incrementally. The application remains functional throughout each phase.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Author
 
-## Acknowledgments
-
-- **Gemini 2.5 Flash** - AI meal suggestions via Lovable AI Gateway
-- **OpenAI** - Text-to-speech functionality
-- **shadcn/ui** - Component library
-- **Tailwind CSS** - Styling framework
-
-## Support
-
-For support, email [support@example.com] or open an issue on GitHub.
-
-## Authors
-
-- Your Name - [@github_username](https://github.com/github_username)
+- Veritia Corcoran - GitHub: https://github.com/Veebaa
 
 ---
 
-**Last Updated**: December 2024  
-**Version**: 1.0.0
+**Last Updated**: August 2026  
+**Version**: 1.0.0-alpha
