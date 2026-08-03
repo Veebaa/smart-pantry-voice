@@ -38,6 +38,7 @@ test-results
 .env.local
 .env.*.local
 env
+venv/
 
 # IDE
 .vscode/*
