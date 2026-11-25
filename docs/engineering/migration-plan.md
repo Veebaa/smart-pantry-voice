@@ -1,12 +1,16 @@
 # Sage 2.0 Migration Plan
 
+> Historical references to Supabase below describe the implementation that preceded the current PostgreSQL + Drizzle setup. They are not current deployment instructions.
+
 **Version:** 1.0
 
-**Status:** Active
+**Status:** Historical plan (implementation completed; retained as migration history)
 
 **Last Updated:** August 2, 2026
 
 **Scope:** Incremental transformation of the existing Sage codebase from its current mixed-concern architecture to the target Sage 2.0 architecture defined in the Architecture Decision Records.
+
+**Implementation note (25 November 2026):** The active application has already moved from the former Supabase implementation to React + TypeScript + Vite, Express + Node.js, PostgreSQL, Drizzle ORM, and OpenAI integration. This document's Supabase references describe that earlier state and are historical; PostgreSQL with Drizzle is current. npm is the package manager. Configure `DATABASE_URL` and `OPENAI_API_KEY`; apply versioned migrations to a new, empty database with `npm run db:migrate`, and use `npm run db:push` only for local development. Production database provisioning and verification have not been completed.
 
 ---
 

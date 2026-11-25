@@ -496,7 +496,7 @@ Shopping list uses generic `apiRequest()` wrapper without dedicated namespace ob
 
 ### Technology Observations
 
-1. **Database**: PostgreSQL via Supabase with Drizzle ORM
+1. **Database**: PostgreSQL via the Express backend and Drizzle ORM. Supabase references elsewhere in this discovery are historical.
 2. **Validation**: Zod schemas for API inputs
 3. **Frontend**: React with TypeScript, useState for state management
 4. **Polling**: 5-second interval on shopping list fetch

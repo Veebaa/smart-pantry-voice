@@ -87,7 +87,7 @@ The architecture is intentionally designed to remain independent of any specific
 - **Tailwind CSS** - Utility-first CSS framework
 - **shadcn/ui** - Headless component library
 - **TanStack React Query** - Server state management
-- **Wouter** - Lightweight routing
+- **React Router** - Client-side routing
 - **React Hook Form** - Form state management
 
 ### Backend
@@ -99,11 +99,12 @@ The architecture is intentionally designed to remain independent of any specific
 - **Zod** - Runtime schema validation
 
 ### DevOps & Testing
-- **Bun** - Fast JavaScript runtime and package manager
+- **Node.js** - Application runtime
+- **npm** - Dependency installation using `package-lock.json`
 - **Vitest** - Unit testing framework
 - **Playwright** - End-to-end testing
 - **GitHub Actions** - CI/CD pipeline
-- **Replit** - Development and deployment platform
+- **Replit** - Existing development/deployment configuration
 
 ## Security Architecture
 
@@ -123,7 +124,8 @@ See [Security Architecture](#security-architecture-1) for detailed implementatio
 
 ## Prerequisites
 
-- **Bun** 1.0+ (package manager and runtime)
+- **Node.js** 22 (see `.nvmrc`)
+- **npm**
 - **PostgreSQL** 14+
 
 
@@ -137,27 +139,34 @@ git clone https://github.com/Veebaa/smart-pantry-voice.git
 cd smart-pantry-voice
 
 # Install dependencies
-bun install
+npm ci
 
 # Set up environment variables
 cp .env.example .env
-# Edit .env with your API keys and database URL
+# Edit .env with your PostgreSQL URL and OpenAI API key
 
-# Run database migrations
-bun run db:push
+# Apply versioned Drizzle migrations
+npm run db:migrate
 
 # Start development server
-bun run dev
+npm run dev
 ```
 
 The application will be available at `http://localhost:5000`
+
+### PostgreSQL schema and migrations
+
+`shared/schema.ts` is the application schema. The checked-in `migrations/0000_initial_schema.sql` was generated from that schema. For a new, empty database, set `DATABASE_URL` in `.env` and run `npm run db:migrate` before starting the application.
+
+When the Drizzle schema changes, generate and review a migration with `npm run db:generate`, then commit the SQL and metadata under `migrations/`. Apply reviewed migrations with `npm run db:migrate`. `db:push` is retained for local development only.
+
+The initial migration is for an empty database. Do not run it against an existing database that already contains application tables unless that database has first been safely baselined against the migration history. Back up existing data and agree on a baseline/adoption plan before using versioned migrations on it. The setup steps above do not reset a database.
 
 ### Using Docker
 
 ```bash
 docker build -t sage .
 docker run -p 5000:5000 \
-  -e LOVABLE_API_KEY=your_key \
   -e OPENAI_API_KEY=your_key \
   -e DATABASE_URL=postgresql://... \
   sage
@@ -189,42 +198,39 @@ Contributors should familiarise themselves with these documents before making ar
 
 ## API
 
-The HTTP API is currently undergoing architectural modernisation as part of Sage 2.0.
-
-Endpoint documentation will be published separately once the migration is complete.
-
-During the migration, the application remains fully functional, but endpoint contracts may evolve as architectural boundaries are introduced.
+The current HTTP API is implemented by the Express/Node.js backend. Endpoint contracts may evolve as the architecture develops; see the route implementations under `server/` for current behavior.
 
 ## Development
 
 ### Available Scripts
 
-All scripts use **Bun**:
+Scripts use npm and the committed `package-lock.json`:
 
 ```bash
 # Development
-bun run dev                 # Start dev server with hot reload
-bun run build              # Production build
-bun run start              # Start production server
+npm run dev                 # Start dev server with hot reload
+npm run build              # Production build
+npm run start              # Start production server
 
 # Testing
-bun run test               # Run all tests
-bun run test:watch        # Tests in watch mode
-bun run test:coverage     # With coverage report
-bun run test:e2e          # Playwright E2E tests
-bun run test:e2e:ui       # E2E tests with UI
+npm test                    # Run unit tests
+npm run test:watch          # Tests in watch mode
+npm run test:coverage       # With coverage report
+npm run test:e2e            # Playwright E2E tests
+npm run test:e2e:ui         # E2E tests with UI
 
 # Database
-bun run db:push           # Apply schema changes
-bun run db:pull           # Pull schema from database
-bun run db:studio         # Open Drizzle Studio
+npm run db:generate         # Generate migration from shared/schema.ts
+npm run db:migrate          # Apply pending migrations
+npm run db:push             # Development-only schema push; avoid in production
+npm run db:studio           # Open Drizzle Studio
 
 # Linting & Type Checking
-bun run lint              # ESLint check
-bun run type-check        # TypeScript check
+npm run lint              # ESLint check
+npm run type-check        # TypeScript check
 ```
 
-**Note**: This project uses **Bun** exclusively. Only `bun.lock` and `bun.lockb` are committed. Do not use npm or yarn.
+The application uses Node.js; install dependencies reproducibly with `npm ci`.
 
 ### Code Style
 
@@ -233,46 +239,43 @@ This project uses:
 - **Prettier** for code formatting
 - **TypeScript** for type safety
 
-Run `bun run lint` before committing.
+Run `npm run lint` before committing.
 
 ## Testing
 
 ### Unit Tests
 ```bash
-bun run test tests/unit/server/security.test.ts
-bun run test tests/unit/server/itemClassifier.test.ts
+npm test -- tests/unit/server/security.test.ts
+npm test -- tests/unit/server/itemClassifier.test.ts
 ```
 
 ### End-to-End Tests
 ```bash
 # Start server first
-bun run dev
+npm run dev
 
 # In another terminal
-bun run test:e2e
+npm run test:e2e
 ```
 
 ### Test Coverage
 ```bash
-bun run test:coverage
+npm run test:coverage
 ```
 
 Coverage reports are generated in the `coverage/` directory.
 
 ## Deployment
 
-Deployment documentation will evolve alongside the Sage 2.0 migration.
+The active application architecture is React/Vite → Express/Node.js → PostgreSQL via Drizzle ORM, with OpenAI used by the server-side assistant and text-to-speech routes. npm is used for dependency installation and scripts. No production PostgreSQL database has been provisioned or verified, and production deployment is not currently confirmed.
 
-The target deployment architecture is documented within the engineering documentation.
-
-Current deployment instructions remain applicable until the migration is complete.
+For local development, configure `DATABASE_URL` and `OPENAI_API_KEY` in `.env` as described above. Production deployment instructions will be finalized after a hosting platform and database have been selected and verified. Do not treat the example values below as provisioned infrastructure.
 
 ### Environment Variables (Production)
 
 ```env
 NODE_ENV=production
 DATABASE_URL=postgresql://user:password@host:5432/sage
-LOVABLE_API_KEY=your_lovable_key
 OPENAI_API_KEY=your_openai_key
 ```
 
@@ -305,7 +308,7 @@ See `.github/workflows/ci.yml` for details.
 ### Security Testing
 
 ```bash
-bun run test tests/unit/server/security.test.ts
+npm test -- tests/unit/server/security.test.ts
 ```
 
 ### Reporting Security Issues
@@ -342,9 +345,9 @@ This helps ensure all contributions remain consistent with the Sage architecture
 ### Pull Request Guidelines
 
 - Update tests for new features
-- Ensure all tests pass (`bun run test`)
+- Ensure all tests pass (`npm test`)
 - Update documentation as needed
-- Follow code style guidelines (`bun run lint`)
+- Follow code style guidelines (`npm run lint`)
 
 ## Performance
 
@@ -364,7 +367,7 @@ This helps ensure all contributions remain consistent with the Sage architecture
 
 ### "Voice not working"
 - Check microphone permissions in browser
-- Verify LOVABLE_API_KEY is set
+- Verify OPENAI_API_KEY is set
 - Check browser console for CORS errors
 
 ### "Database connection failed"

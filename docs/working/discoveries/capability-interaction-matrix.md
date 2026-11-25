@@ -367,7 +367,7 @@ Understanding these interactions provides context for future architectural refac
 
 | Aspect | Capabilities Using | Current Implementation |
 |--------|-------------------|------------------------|
-| PostgreSQL (Supabase) | All | Single database for all tables |
+| PostgreSQL (historically hosted on Supabase) | All | Single database for all tables; Supabase hosting reference is historical, current host is not provisioned or verified |
 | Drizzle ORM | All | Shared ORM for all queries |
 | Connection pooling | All | `postgres.js` client with connection pool |
 

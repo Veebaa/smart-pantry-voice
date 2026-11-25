@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--import tsx' node --watch --env-file=.env server/index.ts",
     "build": "vite build && tsc -p tsconfig.node.json && tsc-alias -p tsconfig.node.json",
+    "type-check": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "start": "NODE_ENV=production node dist/server/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint .",

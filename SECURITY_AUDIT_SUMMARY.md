@@ -1,5 +1,7 @@
 # Security Audit Summary - Sage Kitchen Assistant
 
+> **Historical report; superseded.** This November 2025 audit predates the current Express/Drizzle/PostgreSQL implementation and refers to Supabase resources that are no longer in the application. Its findings, production-readiness conclusion, and configuration instructions are not a current security assessment. Production database provisioning and verification have not been completed. See [SECURITY.md](SECURITY.md) for the active architecture and remaining review items.
+
 **Audit Date**: 2025-11-19
 **Auditor**: AI Security Review
 **Status**: ✅ Critical vulnerabilities fixed, 1 manual action required

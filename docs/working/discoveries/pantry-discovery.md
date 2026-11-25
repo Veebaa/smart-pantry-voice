@@ -468,9 +468,9 @@ Pantry business logic currently handles:
 
 ---
 
-### Legacy/Backup Infrastructure
+### Historical Superseded Infrastructure (Not Active)
 
-**Supabase Edge Function:** `supabase/functions/pantry-assistant/index.ts`
+**Historical Supabase Edge Function (superseded):** `supabase/functions/pantry-assistant/index.ts` was part of an earlier implementation and has been removed. The active endpoint is the Express `/api/pantry-assistant` route.
 
 | Service | Model | Status | Pantry Usage |
 |---------|-------|--------|-------------|
@@ -540,7 +540,7 @@ Pantry business logic currently handles:
 
 ### Technology Observations
 
-1. **Database**: PostgreSQL via Supabase with Drizzle ORM
+1. **Database**: PostgreSQL via the Express backend and Drizzle ORM. Supabase references elsewhere in this discovery are historical.
 2. **Validation**: Zod schemas for all API inputs
 3. **AI**: OpenAI GPT-4o-mini with structured tool output
 4. **Frontend**: React with TypeScript, no state management library (useState only)

@@ -1,7 +1,0 @@
-project_id = "mhiaopicttdjcschrqoh"
-
-[functions.pantry-assistant]
-verify_jwt = true
-
-[functions.openai-tts]
-verify_jwt = true

@@ -1,14 +1,14 @@
 # Sage - AI-Powered Pantry Assistant
 
 ## Overview
-Sage is a voice-enabled pantry management application with AI meal suggestions. Migrated from Lovable/Supabase to Replit fullstack architecture with Express backend and PostgreSQL database.
+Sage is a voice-enabled pantry management application with AI meal suggestions. The active architecture is React/Vite → Express/Node.js → Drizzle ORM → PostgreSQL. Supabase is not used by the application.
 
 ## Tech Stack
 - **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
 - **Backend**: Express.js, Node.js
 - **Database**: PostgreSQL with Drizzle ORM
 - **Authentication**: Cookie-based sessions
-- **AI Integration**: Lovable AI Gateway (Gemini 2.5 Flash) and OpenAI TTS
+- **AI Integration**: OpenAI API for pantry assistant and text-to-speech
 
 ## Project Structure
 ```
@@ -29,8 +29,8 @@ Sage is a voice-enabled pantry management application with AI meal suggestions. 
 /shared
   - schema.ts: Shared database schema and types
 
-/db
-  - migrations/: SQL migration files
+/migrations
+  - 0000_initial_schema.sql: Initial PostgreSQL schema generated from shared/schema.ts
 ```
 
 ## Features
@@ -69,11 +69,10 @@ Sage is a voice-enabled pantry management application with AI meal suggestions. 
 - POST `/api/openai-tts` - Convert text to speech
 
 ## Environment Variables Required
-The following API keys are needed for full functionality:
+Environment variables for the active application:
 
-- `LOVABLE_API_KEY` - For AI assistant (Gemini 2.5 Flash via Lovable gateway)
-- `OPENAI_API_KEY` - For text-to-speech functionality
-- `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
+- `DATABASE_URL` - PostgreSQL connection string
+- `OPENAI_API_KEY` - For the pantry assistant and text-to-speech routes
 
 ## Security Features
 - Bcrypt password hashing (bcryptjs for Replit compatibility)
@@ -145,51 +144,48 @@ The following API keys are needed for full functionality:
 - ✅ Added "Cook This" button to save selected recipes to history tab
 
 ## Deployment Configuration
-- **Target**: Autoscale (stateless web application)
-- **Build**: `bun run build` (compiles TypeScript to dist/)
-- **Run**: `bun run start` (NODE_ENV=production node dist/server/index.js)
+- **Configured target**: Replit Autoscale (configuration only; production deployment and database provisioning have not been verified)
+- **Build**: `npm run build` (compiles TypeScript to dist/)
+- **Run**: `npm run start` (NODE_ENV=production node dist/server/index.js)
 - **Port**: 5000 → 80 (external)
 - **Health Check**: Both `/` and `/health` respond immediately before routes load
 - **Static Files**: Served synchronously at startup (before server.listen)
 - **Database**: Connects lazily on first API request
 
 ## Next Steps
-1. Deploy the application (click Publish button)
-2. Request API keys from user if needed (LOVABLE_API_KEY, OPENAI_API_KEY)
-3. Test voice assistant functionality
-4. Test text-to-speech features
+Production deployment is not yet confirmed. Before publishing, select and provision a PostgreSQL database, configure `DATABASE_URL` and (if AI features are required) `OPENAI_API_KEY`, review and apply migrations to the intended database, and verify the deployed service. Do not run migrations against an unknown or non-disposable database.
 
 ## Development
 ```bash
 # Start development server
-bun run dev
+npm run dev
 
-# Run database migrations
-bun run db:push
+# Apply versioned database migrations
+npm run db:migrate
 
 # View database in Drizzle Studio
-bun run db:studio
+npm run db:studio
 ```
 
 ## Testing
 ```bash
 # Run all unit tests
-bun run test
+npm run test
 
 # Run tests in watch mode
-bun run test:watch
+npm run test:watch
 
 # Run tests with coverage
-bun run test:coverage
+npm run test:coverage
 
 # Run frontend component tests
-bun run test:client
+npm run test:client
 
 # Run E2E tests (requires server running)
-bun run test:e2e
+npm run test:e2e
 
 # Run E2E tests with UI
-bun run test:e2e:ui
+npm run test:e2e:ui
 ```
 
 ### Test Structure
@@ -263,7 +259,7 @@ The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that
 ### 🧪 Security Testing
 Run security-focused tests:
 ```bash
-bun run test tests/unit/server/security.test.ts
+npm test -- tests/unit/server/security.test.ts
 ```
 
 Tests cover:
@@ -282,7 +278,7 @@ Security events logged for:
 Logs kept for audit trail analysis (last 1000 events in memory, integrate with external service for production).
 
 ## Notes
-- The voice assistant uses the Lovable AI Gateway (Gemini 2.5 Flash model)
+- The pantry assistant and text-to-speech routes call OpenAI using the server-side OPENAI_API_KEY
 - Text-to-speech uses OpenAI's TTS API
 - Browser may cache old code - do a hard refresh (Ctrl+Shift+R) if issues occur
 - All API endpoints require authentication except signup/signin
