@@ -49,6 +49,7 @@ router.use(async (_req: Request, _res: Response, next: NextFunction) => {
 });
 
 const db = () => getDb();
+type ShoppingListTransaction = Parameters<Parameters<ReturnType<typeof db>["transaction"]>[0]>[0];
 
 function logRouteError(req: Request, error: unknown) {
   if (error instanceof z.ZodError) return;
@@ -275,7 +276,7 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
   }
 });
 
-async function withShoppingListNameLock<T>(userId: string, name: string, operation: (tx: any) => Promise<T>): Promise<T> {
+async function withShoppingListNameLock<T>(userId: string, name: string, operation: (tx: ShoppingListTransaction) => Promise<T>): Promise<T> {
   const normalizedName = name.trim().toLowerCase();
   return db().transaction(async (tx) => {
     // Transaction-scoped advisory locks serialize all list writes for this

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import cors from "cors";
+import type { CorsRequest } from "cors";
 import { createCorsOptions, isAllowedOrigin } from "../../../server/cors.js";
 
 function invokeCors(options: ReturnType<typeof createCorsOptions>, method: string, headers: Record<string, string> = {}) {
   const responseHeaders = new Map<string, string>();
-  const response: any = {
+  const response = {
     statusCode: 200,
     setHeader: (name: string, value: string) => responseHeaders.set(name.toLowerCase(), value),
     getHeader: (name: string) => responseHeaders.get(name.toLowerCase()),
@@ -12,7 +13,7 @@ function invokeCors(options: ReturnType<typeof createCorsOptions>, method: strin
   };
   let continued = false;
   const middleware = cors(options);
-  middleware({ method, headers }, response, () => { continued = true; });
+  middleware({ method, headers } satisfies CorsRequest, response, () => { continued = true; });
   return { headers: responseHeaders, status: response.statusCode, continued };
 }
 

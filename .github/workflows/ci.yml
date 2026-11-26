@@ -15,6 +15,22 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      DATABASE_URL: postgresql://sage:sage@localhost:5432/sage_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sage
+          POSTGRES_PASSWORD: sage
+          POSTGRES_DB: sage_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sage -d sage_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,6 +43,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Apply migrations to test database
+        run: npm run db:migrate
 
       - name: Run unit tests
         run: npm test -- tests/unit --reporter=verbose
@@ -68,6 +87,22 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://sage:sage@localhost:5432/sage_e2e
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sage
+          POSTGRES_PASSWORD: sage
+          POSTGRES_DB: sage_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sage -d sage_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,10 +122,11 @@ jobs:
       - name: Create local environment file
         run: cp .env.example .env
 
+      - name: Apply migrations to E2E database
+        run: npm run db:migrate
+
       - name: Run Playwright tests
         run: npm run test:e2e
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
