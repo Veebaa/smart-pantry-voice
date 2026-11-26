@@ -156,7 +156,7 @@ The application will be available at `http://localhost:5000`
 
 ### PostgreSQL schema and migrations
 
-`shared/schema.ts` is the application schema. The checked-in `migrations/0000_initial_schema.sql` was generated from that schema. For a new, empty database, set `DATABASE_URL` in `.env` and run `npm run db:migrate` before starting the application.
+`shared/schema.ts` is the application schema. The checked-in `migrations/0000_initial_schema.sql` was generated from that schema. For a new, empty database, set `DATABASE_URL` in `.env` and run `npm run db:migrate` before starting the application. Local and development database connections do not use SSL, so a local PostgreSQL instance can be used without TLS. When `NODE_ENV=production`, the backend requires SSL for PostgreSQL connections; configure a production PostgreSQL service that supports TLS. Production database provisioning and deployment have not been verified.
 
 When the Drizzle schema changes, generate and review a migration with `npm run db:generate`, then commit the SQL and metadata under `migrations/`. Apply reviewed migrations with `npm run db:migrate`. `db:push` is retained for local development only.
 

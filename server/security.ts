@@ -227,11 +227,14 @@ export function securityHeadersMiddleware(
     "geolocation=(), microphone=(), camera=()"
   );
 
-  // Content Security Policy - Strict, blocks inline scripts
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
-  );
+  // Keep the strict policy in production. Vite's React refresh preamble is an
+  // inline module script in development, so this production CSP blocks HMR.
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'"
+    );
+  }
 
   next();
 }

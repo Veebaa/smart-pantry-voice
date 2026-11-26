@@ -74,6 +74,8 @@ Environment variables for the active application:
 - `DATABASE_URL` - PostgreSQL connection string
 - `OPENAI_API_KEY` - For the pantry assistant and text-to-speech routes
 
+The backend connects to local/development PostgreSQL without SSL. In production (`NODE_ENV=production`), it requires SSL; configure a PostgreSQL service that supports TLS.
+
 ## Security Features
 - Bcrypt password hashing (bcryptjs for Replit compatibility)
 - Cookie-based session management

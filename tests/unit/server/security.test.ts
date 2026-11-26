@@ -7,7 +7,52 @@ import {
   sanitizeString,
   sanitizeNumber,
   getSecureCookieOptions,
+  securityHeadersMiddleware,
 } from '../../../server/security.js';
+import type { Request, Response } from 'express';
+
+describe('Security headers by environment', () => {
+  const collectHeaders = (environment: string) => {
+    const previousEnvironment = process.env.NODE_ENV;
+    const headers = new Map<string, string>();
+    process.env.NODE_ENV = environment;
+    try {
+      securityHeadersMiddleware(
+        {} as Request,
+        { setHeader: (name: string, value: string) => headers.set(name, value) } as unknown as Response,
+        () => {},
+      );
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnvironment;
+    }
+    return headers;
+  };
+
+  it('keeps other security headers and omits CSP in development for Vite HMR', () => {
+    const headers = collectHeaders('development');
+
+    expect(headers.has('Content-Security-Policy')).toBe(false);
+    expect(headers.get('X-Frame-Options')).toBe('DENY');
+    expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(headers.get('X-XSS-Protection')).toBe('1; mode=block');
+    expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(), camera=()');
+  });
+
+  it('retains the restrictive CSP and other headers in production', () => {
+    const headers = collectHeaders('production');
+
+    expect(headers.get('Content-Security-Policy')).toBe(
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'",
+    );
+    expect(headers.get('X-Frame-Options')).toBe('DENY');
+    expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(headers.get('X-XSS-Protection')).toBe('1; mode=block');
+    expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(), camera=()');
+  });
+});
 
 // ============================================================================
 // 🎫 CSRF TOKEN TESTS

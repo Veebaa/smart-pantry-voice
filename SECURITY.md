@@ -8,11 +8,12 @@ This document describes the active application path in this repository: React/Vi
 - API handlers must authenticate requests and scope user-owned records to the authenticated user. The PostgreSQL schema currently has no foreign keys or row-level security policies; those controls must not be assumed to exist.
 - Drizzle parameterizes database queries. Validate request bodies before using them and avoid returning raw database/provider errors to clients.
 - `OPENAI_API_KEY` is server-side configuration for the Express AI and text-to-speech routes. Do not put it in a `VITE_` variable or commit real credentials.
-- Configure HTTPS in production. Session cookies are marked secure when `NODE_ENV=production`.
+- Configure HTTPS and PostgreSQL TLS in production. The backend requires PostgreSQL SSL when `NODE_ENV=production` and disables it for local/development connections. Session cookies are marked secure when `NODE_ENV=production`.
+- Authenticated `POST`, `PATCH`, and `DELETE` requests require the session-bound `X-CSRF-Token` returned by signup/signin. The frontend refreshes it through `GET /api/auth/csrf-token` when missing or expired. Signup and signin are pre-authentication exceptions; safe methods do not require the token.
 
 ## Production review still required
 
-Before exposing the service publicly, verify CORS is restricted to intended origins, CSRF protections are enforced for cookie-authenticated requests, session tokens are not unnecessarily exposed to browser storage, rate limiting works across instances, and error responses do not expose internal details. Confirm database backups, least-privilege credentials, TLS, and a safe migration process for the selected PostgreSQL host.
+Before exposing the service publicly, verify CORS is restricted to intended origins, CSRF token state is shared or requests are routed consistently across application instances, session tokens are not unnecessarily exposed to browser storage, rate limiting works across instances, and error responses do not expose internal details. Confirm database backups, least-privilege credentials, TLS, and a safe migration process for the selected PostgreSQL host.
 
 Run the security tests with `npm test -- tests/unit/server/security.test.ts`. Passing tests do not replace a production configuration review.
 
