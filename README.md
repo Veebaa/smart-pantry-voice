@@ -116,7 +116,7 @@ This project implements OWASP security best practices:
 - **CSRF Token Storage**: The session-bound CSRF token is kept in sessionStorage and sent on authenticated state-changing requests; it is not an authentication token.
 - **Secure Cookies**: HttpOnly, Secure (HTTPS), SameSite=Strict flags
 - **Input Validation**: Zod schemas with sanitization against XSS/SQL injection
-- **Security Headers**: X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy
+- **Security Headers**: X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy, and Permissions-Policy. Microphone access is allowed for this origin for voice input; geolocation and camera remain disabled.
 - **Audit Logging**: Security event tracking for authentication failures and rate limits
 - **Credentialed CORS**: Production browser origins are explicitly configured with the comma-separated `CORS_ALLOWED_ORIGINS` environment variable. No production origin is assumed; development allows localhost and loopback origins.
 - **Sensitive Logging**: API access logs record method, path, status, and duration without response bodies. Client-side diagnostics do not print pantry request/response data.

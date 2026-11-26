@@ -224,7 +224,7 @@ export function securityHeadersMiddleware(
   // Permissions Policy (formerly Feature Policy)
   res.setHeader(
     "Permissions-Policy",
-    "geolocation=(), microphone=(), camera=()"
+    "geolocation=(), microphone=(self), camera=()"
   );
 
   // Keep the strict policy in production. Vite's React refresh preamble is an

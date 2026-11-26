@@ -65,7 +65,8 @@ describe('Security headers by environment', () => {
     expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(headers.get('X-XSS-Protection')).toBe('1; mode=block');
     expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(), camera=()');
+    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(self), camera=()');
+    expect(headers.get('Permissions-Policy')).not.toContain('microphone=*');
   });
 
   it('retains the restrictive CSP and other headers in production', () => {
@@ -78,7 +79,8 @@ describe('Security headers by environment', () => {
     expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(headers.get('X-XSS-Protection')).toBe('1; mode=block');
     expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
-    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(), camera=()');
+    expect(headers.get('Permissions-Policy')).toBe('geolocation=(), microphone=(self), camera=()');
+    expect(headers.get('Permissions-Policy')).not.toContain('microphone=*');
   });
 });
 

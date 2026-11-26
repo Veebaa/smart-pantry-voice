@@ -252,7 +252,7 @@ The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that
   - X-Content-Type-Options: nosniff (MIME sniffing prevention)
   - CSP: Strict content security policy
   - Referrer-Policy: strict-origin-when-cross-origin
-  - Permissions-Policy: Disabled for geolocation, microphone, camera
+  - Permissions-Policy: Microphone allowed for this origin for voice input; geolocation and camera disabled
 
 ### 🔏 Data Protection
 - **Password Requirements**: Min 8 chars, 1 uppercase, 1 lowercase, 1 number
