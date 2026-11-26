@@ -52,7 +52,7 @@ Built with modern software engineering practices, Sage emphasises maintainabilit
 - **AI Meal Suggestions**: Get personalized recipe recommendations powered by conversational AI
 - **Smart Categorization**: Automatic organization of items into fridge, freezer, cupboard, and pantry categories
 - **Expiration Tracking**: Monitor expiring items with visual alerts and thresholds
-- **Shopping Lists**: Auto-generated shopping lists from suggested recipes
+- **Shopping Lists**: When a pantry item is created or updated at or below its low-stock threshold, a matching list row is reused or added. Checked matches are reopened; rows are not automatically removed when stock rises, since the list does not distinguish automatic from manually added items. Recipe suggestions can also generate shopping lists.
 - **Recipe Management**: Save favorite recipes and maintain a history with ratings and notes
 - **Dietary Preferences**: Support for vegetarian, vegan, gluten-free, and other dietary restrictions
 - **Text-to-Speech**: Natural audio responses from the AI assistant

@@ -672,12 +672,11 @@ const Index = () => {
 
           <TabsContent value="shopping">
             {(() => {
-              // Combine: low stock items from pantry + items added directly to shopping list + AI suggestions
-              const lowStockNames = lowStockItems.map(item => item.name);
+              // Low-stock items are persisted to the shopping list by the pantry API.
               const dbShoppingNames = shoppingListItems.filter(i => !i.checked).map(item => item.name);
               const aiShoppingList = sageResponse?.payload?.shopping_list || [];
               // Merge and deduplicate
-              const combinedList = [...new Set([...lowStockNames, ...dbShoppingNames, ...aiShoppingList])];
+              const combinedList = [...new Set([...dbShoppingNames, ...aiShoppingList])];
               
               return combinedList.length > 0 ? (
                 <ShoppingList 

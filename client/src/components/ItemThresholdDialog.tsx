@@ -70,7 +70,7 @@ export const ItemThresholdDialog = ({
         <DialogHeader>
           <DialogTitle>Set Quantity Alerts for {itemName}</DialogTitle>
           <DialogDescription>
-            Set the current quantity and low stock threshold. When quantity drops below the threshold, the item will be marked as running low.
+            Set the current quantity and low stock threshold. When quantity is at or below the threshold, the item will be marked as running low and added to your shopping list.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">

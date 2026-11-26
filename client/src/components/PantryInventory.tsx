@@ -57,7 +57,7 @@ const categoryLabels = {
   fridge: "Fridge",
   freezer: "Freezer",
   cupboard: "Cupboard",
-  pantry_staples: "Pantry Staples",
+  pantry_staples: "Pantry",
 };
 
 export const PantryInventory = ({ items, onDelete, onUpdate }: PantryInventoryProps) => {
