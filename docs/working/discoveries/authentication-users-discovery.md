@@ -135,7 +135,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 | `requireAuth()` | Middleware for protected endpoints | express middleware | **Interface** (HTTP middleware) |
 
 **Authentication Flow (auth.ts):**
-- User routes → requireAuth middleware → Session token from header or cookie → getSessionUser() → Attach user to req.user
+- User routes → requireAuth middleware → Session token from header or cookie → resolve database session ID and user → require `X-CSRF-Token` for authenticated POST/PATCH/DELETE requests → attach user to req.user
 
 **File:** `server/routes.ts`
 

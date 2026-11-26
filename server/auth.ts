@@ -4,6 +4,7 @@ import { users, sessions } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { validateCsrfToken } from "./security.js";
 
 const SALT_ROUNDS = 10;
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -34,7 +35,7 @@ export async function createSession(userId: string) {
   return session;
 }
 
-export async function getSessionUser(token: string) {
+export async function getSession(token: string) {
   const db = getDb();
   const [session] = await db
     .select()
@@ -46,6 +47,14 @@ export async function getSessionUser(token: string) {
     return null;
   }
 
+  return session;
+}
+
+export async function getSessionUser(token: string) {
+  const session = await getSession(token);
+  if (!session) return null;
+
+  const db = getDb();
   const [user] = await db
     .select()
     .from(users)
@@ -67,19 +76,43 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const user = await getSessionUser(token);
+  const session = await getSession(token);
+  if (!session) {
+    return res.status(401).json({ error: "Invalid or expired session" });
+  }
+
+  const db = getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
   if (!user) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
   req.user = user;
-  next();
+  req.sessionId = session.id;
+  return requireCsrfToken(req, res, next);
+}
+
+export function requireCsrfToken(req: Request, res: Response, next: NextFunction) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
+    return next();
+  }
+
+  const csrfToken = req.get("X-CSRF-Token") || "";
+  if (!req.sessionId || !validateCsrfToken(req.sessionId, csrfToken)) {
+    return res.status(403).json({
+      error: "Invalid or missing CSRF token",
+      code: "CSRF_INVALID",
+    });
+  }
+
+  return next();
 }
 
 declare global {
   namespace Express {
     interface Request {
       user?: typeof users.$inferSelect;
+      sessionId?: string;
     }
   }
 }

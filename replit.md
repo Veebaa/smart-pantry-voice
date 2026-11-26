@@ -81,6 +81,7 @@ Environment variables for the active application:
 - Input validation with Zod schemas
 - Password requirements: min 8 chars, uppercase, lowercase, number
 - Protected API endpoints with requireAuth middleware
+- Session-bound CSRF tokens required for authenticated state-changing API requests
 
 ## Database Schema
 

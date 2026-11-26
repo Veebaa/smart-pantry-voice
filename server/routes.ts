@@ -171,7 +171,11 @@ router.post("/api/auth/signin", loginRateLimiter, async (req, res) => {
   }
 });
 
-router.post("/api/auth/signout", async (req, res) => {
+router.get("/api/auth/csrf-token", requireAuth, (req, res) => {
+  res.json({ csrfToken: createCsrfToken(req.sessionId!) });
+});
+
+router.post("/api/auth/signout", requireAuth, async (req, res) => {
   // Get token from Authorization header or cookie
   const authHeader = req.headers.authorization;
   let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;

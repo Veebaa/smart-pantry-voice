@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { apiRequest, setAuthToken, clearAuthToken, getAuthToken } from "@/lib/api";
+import { apiRequest, setAuthToken, clearAuthToken, getAuthToken, setCsrfToken, clearCsrfToken } from "@/lib/api";
 
 interface User {
   id: string;
@@ -47,11 +47,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Token is invalid, clear it
         clearAuthToken();
+        clearCsrfToken();
         setUser(null);
       }
     } catch (error) {
       console.error("Auth check failed:", error);
       clearAuthToken();
+      clearCsrfToken();
       setUser(null);
     } finally {
       setLoading(false);
@@ -63,14 +65,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     if (response.token) {
       setAuthToken(response.token);
     }
+    if (response.csrfToken) setCsrfToken(response.csrfToken);
     setUser(response.user);
   };
 
   const signup = async (email: string, password: string) => {
-    const response = await apiRequest("POST", "/api/auth/signup", { email, password });
+    const response = await apiRequest("POST", "/api/auth/signup", {
+      email,
+      password,
+      confirmPassword: password,
+    });
     if (response.token) {
       setAuthToken(response.token);
     }
+    if (response.csrfToken) setCsrfToken(response.csrfToken);
     setUser(response.user);
   };
 
@@ -81,6 +89,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       // Ignore errors on signout
     }
     clearAuthToken();
+    clearCsrfToken();
     setUser(null);
   };
 
