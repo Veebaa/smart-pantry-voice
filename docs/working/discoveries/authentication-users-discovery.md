@@ -68,7 +68,7 @@ The Authentication and Users capabilities manage user registration, authenticati
    - Handle expired sessions (return 401)
 
 4. **Session Termination**
-   - Accept session token from Authorization header or cookie
+   - Authenticate from the HttpOnly session cookie only; Bearer authentication is not supported
    - Delete session from database
    - Clear session cookie from browser
    - Return success response
@@ -135,7 +135,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 | `requireAuth()` | Middleware for protected endpoints | express middleware | **Interface** (HTTP middleware) |
 
 **Authentication Flow (auth.ts):**
-- User routes → requireAuth middleware → Session token from header or cookie → resolve database session ID and user → require `X-CSRF-Token` for authenticated POST/PATCH/DELETE requests → attach user to req.user
+- User routes → requireAuth middleware → Session token from HttpOnly cookie → resolve database session ID and user → require `X-CSRF-Token` for authenticated POST/PATCH/DELETE requests → attach user to req.user
 
 **File:** `server/routes.ts`
 
@@ -143,7 +143,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 |----------|--------|-----------------|----------|--------------|-----------------|
 | `/api/auth/signup` | POST | Register new user | Line 74 | authRateLimiter, validateInput, hashPassword, createSession, CSRF token, secure cookie | **Interface** (HTTP transport) |
 | `/api/auth/signin` | POST | Authenticate existing user | Line 108 | loginRateLimiter, validateInput, comparePassword, createSession, CSRF token, secure cookie | **Interface** (HTTP transport) |
-| `/api/auth/signout` | POST | Terminate session | Line 155 | session token extraction, database delete, cookie clear | **Interface** (HTTP transport) |
+| `/api/auth/signout` | POST | Terminate session | Line 155 | cookie session authentication, database delete, cookie clear, CSRF validation | **Interface** (HTTP transport) |
 | `/api/auth/user` | GET | Fetch current user info | Line 166 | requireAuth, return user from req.user | **Interface** (HTTP transport) |
 | `/api/user-settings` | GET | Fetch user settings | Line 268 | requireAuth, userId scoping | **Interface** (HTTP transport) |
 | `/api/user-settings` | POST | Create or update user settings | Line 278 | requireAuth, validateInput, upsert logic | **Interface** (HTTP transport) |
@@ -156,7 +156,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 - Create session via `createSession()`
 - Generate CSRF token via `createCsrfToken()`
 - Set secure cookie via `res.cookie()`
-- Return: user object, token, CSRF token
+- Return: user object and CSRF token; session token is set only in the HttpOnly cookie
 - Error handling: 400 on validation, 400 on duplicate email, 500 on error
 
 **Signin Details (Line 108):**
@@ -166,11 +166,11 @@ The Authentication and Users capabilities manage user registration, authenticati
 - Create session via `createSession()`
 - Generate CSRF token
 - Set secure cookie
-- Return: user object, token, CSRF token
+- Return: user object and CSRF token; session token is set only in the HttpOnly cookie
 - Error handling: 401 on invalid email/password, 500 on error
 
 **Signout Details (Line 155):**
-- Extract token from Authorization header or session cookie
+- Extract token from the session cookie only
 - Delete session from database
 - Clear session cookie
 - Return success response
@@ -209,29 +209,27 @@ The Authentication and Users capabilities manage user registration, authenticati
 
 | Function | Responsibility | Implementation | Classification |
 |----------|-----------------|-----------------|-----------------|
-| `checkAuth()` | Session persistence on page load | GET /api/auth/user with token, set user state or clear token | **Conversation** (application state) |
-| `login()` | Authenticate user | POST /api/auth/signin, store token, set user state | **Conversation** (application state) |
-| `signup()` | Register new user | POST /api/auth/signup, store token, set user state | **Conversation** (application state) |
-| `logout()` | Terminate session | POST /api/auth/signout, clear token, clear user state | **Conversation** (application state) |
+| `checkAuth()` | Session persistence on page load | GET /api/auth/user with cookies included, set user state or clear CSRF state | **Conversation** (application state) |
+| `login()` | Authenticate user | POST /api/auth/signin, store CSRF token in sessionStorage, set user state | **Conversation** (application state) |
+| `signup()` | Register new user | POST /api/auth/signup, store CSRF token in sessionStorage, set user state | **Conversation** (application state) |
+| `logout()` | Terminate session | POST /api/auth/signout with cookie, clear CSRF state and user state | **Conversation** (application state) |
 
 **UserContext State:**
 - `user`: Current authenticated user (id, email) or null
 - `loading`: Boolean indicating auth check in progress
 - `login()`, `signup()`, `logout()`: Functions for auth operations
 
-**Token Storage:**
-- Token stored via `setAuthToken()` (localStorage)
-- Token retrieved via `getAuthToken()` for Authorization headers
-- Token cleared via `clearAuthToken()` on logout
+**Browser Credential Storage:**
+- The session token is held only in the HttpOnly `session_token` cookie and is inaccessible to JavaScript.
+- The session-bound CSRF token is stored in sessionStorage and sent in `X-CSRF-Token` on authenticated mutations.
+- A legacy `sage_auth_token` localStorage value is removed when the app starts.
 
 **File:** `client/src/lib/api.ts`
 
 | Function | Responsibility | Implementation |
 |----------|-----------------|-----------------|
-| `setAuthToken()` | Store token in localStorage | localStorage.setItem('auth_token', token) |
-| `getAuthToken()` | Retrieve token from localStorage | localStorage.getItem('auth_token') |
-| `clearAuthToken()` | Remove token from localStorage | localStorage.removeItem('auth_token') |
-| `apiRequest()` | Add Authorization header if token exists | Headers: Authorization Bearer {token} |
+| `getCsrfToken()` / `setCsrfToken()` | Read/write CSRF token | sessionStorage key `sage_csrf_token` |
+| `apiRequest()` | Send authenticated API requests | Includes cookies; adds `X-CSRF-Token` for authenticated mutations |
 
 ---
 
@@ -327,7 +325,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 
 | API | Used For | Classification |
 |-----|----------|-----------------|
-| `localStorage` | Store session token | **Infrastructure** |
+| `sessionStorage` | Store session-bound CSRF token | **Infrastructure** |
 | `fetch()` / HTTP | HTTP requests to auth endpoints | **Infrastructure** |
 
 ---
@@ -401,11 +399,11 @@ The Authentication and Users capabilities manage user registration, authenticati
 
 1. **Authentication is tightly coupled to HTTP transport**: Signup and signin endpoints embed authentication logic, password hashing, session creation, and response formatting together. This couples business logic to Express middleware and cookie handling.
 
-2. **Session token is stored in both cookie and localStorage**: Cookie used for automatic inclusion in requests, localStorage used for Authorization header in API calls. Dual storage creates two separate token management paths.
+2. **Browser authentication is cookie-only**: The session token is stored in an HttpOnly cookie. The frontend does not store it in localStorage or send it as a Bearer token; the CSRF token is stored separately in sessionStorage.
 
 3. **Rate limiting implemented as in-memory store**: In-memory rate limit store works for single server but is implemented as an in-memory store. No persistence of rate limit state across processes.
 
-4. **CSRF token validation was not identified within the analysed authentication routes**: Tokens created and returned to client but no evidence of CSRF validation on protected endpoints. Token validation code not visible in current routes.
+4. **CSRF protection is session-bound**: Authenticated POST, PATCH, and DELETE requests validate the CSRF token against the session resolved from the cookie. Signup and signin are pre-authentication exceptions.
 
 5. **User settings use "upsert" pattern without explicit transaction**: Settings treated as optional (user may not have row immediately after signup). Upsert logic checks existence then updates or inserts—not atomic without explicit transaction.
 
@@ -421,7 +419,7 @@ The Authentication and Users capabilities manage user registration, authenticati
 
 11. **User settings are lazy-initialized**: Settings table may not have row for user immediately after signup. Each capability must handle null settings gracefully or create settings on demand.
 
-12. **Sign-out is performed using the supplied session token.**: Signout accepts any token and deletes it. If token is leaked, any party can sign out that user. No verification that signout requester is the token owner.
+12. **Sign-out requires the authenticated session cookie and CSRF token**: The session is deleted only after normal cookie authentication and CSRF validation.
 
 ---
 
@@ -429,12 +427,12 @@ The Authentication and Users capabilities manage user registration, authenticati
 
 Authentication and Users capabilities handle:
 - **User registration and login** with bcrypt password hashing and rate limiting
-- **Session management** with 7-day expiration and token-based authentication
+- **Session management** with 7-day expiration and HttpOnly cookie-based browser authentication
 - **User settings** for preferences (dietary, household size, voice)
 
 Key architectural points:
 - **Required for all other capabilities**: Every operation depends on authentication
-- **Dual token storage**: Cookies for automatic inclusion, localStorage for manual header inclusion
+- **Cookie-only browser authentication**: Session cookie is HttpOnly; the CSRF token is separately stored in sessionStorage
 - **Tight HTTP coupling**: Authentication logic mixed with Express routes
 - **Optional user settings**: Created lazily or on demand
 - **Foundational dependency**: Users is prerequisite for Pantry, Shopping, Recipes

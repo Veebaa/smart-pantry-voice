@@ -232,6 +232,8 @@ The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that
 ### 🔐 Authentication & Authorization
 - **Password Hashing**: bcryptjs with 10 salt rounds (resistant to rainbow tables)
 - **Session Tokens**: Cryptographically secure 32-byte tokens (64 hex chars)
+- **Browser Authentication**: Session token is only in the HttpOnly cookie; Bearer headers and localStorage session-token storage are not used. The app clears the legacy `sage_auth_token` localStorage entry at startup.
+- **CSRF Token**: Session-bound token stored in sessionStorage and sent with authenticated state-changing requests.
 - **Session Duration**: 7 days with automatic expiration
 - **Cookie Configuration**: 
   - HttpOnly (prevents JavaScript access - XSS protection)

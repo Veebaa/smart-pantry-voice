@@ -110,7 +110,6 @@ router.post("/api/auth/signup", authRateLimiter, async (req, res) => {
 
     res.status(201).json({
       user: { id: user.id, email: user.email },
-      token: session.token,
       csrfToken,
     });
   } catch (error: any) {
@@ -169,7 +168,6 @@ router.post("/api/auth/signin", loginRateLimiter, async (req, res) => {
 
     res.json({
       user: { id: user.id, email: user.email },
-      token: session.token,
       csrfToken,
     });
   } catch (error: any) {
@@ -184,14 +182,7 @@ router.get("/api/auth/csrf-token", requireAuth, (req, res) => {
 });
 
 router.post("/api/auth/signout", requireAuth, async (req, res) => {
-  // Get token from Authorization header or cookie
-  const authHeader = req.headers.authorization;
-  let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  
-  if (!token) {
-    token = req.cookies.session_token;
-  }
-  
+  const token = req.cookies?.session_token;
   if (token) {
     await db().delete(sessions).where(eq(sessions.token, token));
   }

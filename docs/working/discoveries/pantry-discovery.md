@@ -498,7 +498,7 @@ Pantry business logic currently handles:
 | `postgres.js` | npm package | Database connection pooling |
 | Web Speech API | Browser API | Voice capture (client-side) |
 | Web Audio API | Browser API | Text-to-speech playback (client-side) |
-| localStorage | Browser API | Session token storage |
+| sessionStorage | Browser API | Session-bound CSRF token storage |
 
 ---
 

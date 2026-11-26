@@ -110,9 +110,10 @@ The architecture is intentionally designed to remain independent of any specific
 
 This project implements OWASP security best practices:
 
-- **Authentication**: Bcryptjs password hashing (10 salt rounds) with secure session tokens
+- **Authentication**: Bcryptjs password hashing (10 salt rounds) with server-generated sessions in HttpOnly cookies; the browser does not persist or send session tokens through localStorage or Authorization headers
 - **Rate Limiting**: 5 req/min on auth endpoints, 10 req/15min on login attempts
 - **CSRF Protection**: Token-based CSRF prevention with constant-time comparison
+- **CSRF Token Storage**: The session-bound CSRF token is kept in sessionStorage and sent on authenticated state-changing requests; it is not an authentication token.
 - **Secure Cookies**: HttpOnly, Secure (HTTPS), SameSite=Strict flags
 - **Input Validation**: Zod schemas with sanitization against XSS/SQL injection
 - **Security Headers**: X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy

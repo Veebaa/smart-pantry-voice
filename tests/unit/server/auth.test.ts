@@ -1,5 +1,26 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
+import type { Request, Response, NextFunction } from 'express';
+import { requireAuth } from '../../../server/auth.js';
+
+describe('cookie-only authentication', () => {
+  it('does not authenticate a request using only a Bearer token', async () => {
+    const json = vi.fn();
+    const status = vi.fn(() => ({ json }));
+    const req = {
+      cookies: {},
+      headers: { authorization: 'Bearer a-valid-looking-session-token' },
+    } as unknown as Request;
+    const res = { status } as unknown as Response;
+    const next = vi.fn() as NextFunction;
+
+    await requireAuth(req, res, next);
+
+    expect(status).toHaveBeenCalledWith(401);
+    expect(json).toHaveBeenCalledWith({ error: 'Not authenticated' });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
 
 const passwordSchema = z.string()
   .min(8, "Password must be at least 8 characters")

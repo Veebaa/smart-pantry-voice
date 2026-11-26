@@ -1,17 +1,9 @@
 const API_BASE_URL = "";
-const TOKEN_KEY = "sage_auth_token";
 const CSRF_TOKEN_KEY = "sage_csrf_token";
+const LEGACY_AUTH_TOKEN_KEY = "sage_auth_token";
 
-export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setAuthToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearAuthToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+export function clearLegacyAuthToken(): void {
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
 }
 
 export function getCsrfToken(): string | null {
@@ -26,14 +18,6 @@ export function clearCsrfToken(): void {
   sessionStorage.removeItem(CSRF_TOKEN_KEY);
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
-  }
-  return {};
-}
-
 export async function apiRequest(method: string, endpoint: string, data?: any) {
   return internalApiRequest(endpoint, {
     method,
@@ -45,7 +29,6 @@ async function refreshCsrfToken(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/auth/csrf-token`, {
     method: "GET",
     credentials: "include",
-    headers: getAuthHeaders(),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || typeof data.csrfToken !== "string") {
@@ -66,14 +49,13 @@ async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
   const send = () => {
     const headers = new Headers({
       "Content-Type": "application/json",
-      ...getAuthHeaders(),
     });
     new Headers(options.headers).forEach((value, key) => headers.set(key, value));
     if (requiresCsrf && csrfToken) headers.set("X-CSRF-Token", csrfToken);
 
     return fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    credentials: 'include',
+      ...options,
+      credentials: "include",
       headers,
     });
   };

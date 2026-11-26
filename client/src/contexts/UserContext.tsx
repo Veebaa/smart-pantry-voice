@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { apiRequest, setAuthToken, clearAuthToken, getAuthToken, setCsrfToken, clearCsrfToken } from "@/lib/api";
+import { api, apiRequest, clearCsrfToken, clearLegacyAuthToken, setCsrfToken } from "@/lib/api";
 
 interface User {
   id: string;
@@ -21,38 +21,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Remove bearer tokens left behind by older versions of the app.
+    clearLegacyAuthToken();
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
     try {
-      // Only check auth if we have a token
-      const token = getAuthToken();
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-      
-      const response = await fetch("/api/auth/user", {
-        credentials: 'include',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-      } else {
-        // Token is invalid, clear it
-        clearAuthToken();
-        clearCsrfToken();
-        setUser(null);
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error);
-      clearAuthToken();
+      const data = await api.auth.getUser();
+      setUser(data.user);
+    } catch {
       clearCsrfToken();
       setUser(null);
     } finally {
@@ -62,9 +40,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     const response = await apiRequest("POST", "/api/auth/signin", { email, password });
-    if (response.token) {
-      setAuthToken(response.token);
-    }
     if (response.csrfToken) setCsrfToken(response.csrfToken);
     setUser(response.user);
   };
@@ -75,9 +50,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       password,
       confirmPassword: password,
     });
-    if (response.token) {
-      setAuthToken(response.token);
-    }
     if (response.csrfToken) setCsrfToken(response.csrfToken);
     setUser(response.user);
   };
@@ -85,10 +57,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       await apiRequest("POST", "/api/auth/signout", {});
-    } catch (error) {
+    } catch {
       // Ignore errors on signout
     }
-    clearAuthToken();
     clearCsrfToken();
     setUser(null);
   };

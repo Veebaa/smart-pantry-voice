@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
@@ -22,12 +23,14 @@ const testDatabaseIsLocal = (() => {
 
 interface TestUser {
   id: string;
-  authorization: string;
+  sessionToken: string;
+  sessionCookie: string;
   csrfToken: string;
 }
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use(routes);
 
 const testUserIds: string[] = [];
@@ -42,14 +45,15 @@ async function createTestUser(): Promise<TestUser> {
   const session = await createSession(user.id);
   return {
     id: user.id,
-    authorization: `Bearer ${session.token}`,
+    sessionToken: session.token,
+    sessionCookie: `session_token=${session.token}`,
     csrfToken: createCsrfToken(session.id),
   };
 }
 
 function authenticated(user: TestUser) {
   const withAuth = (test: ReturnType<typeof request>) => test
-    .set("Authorization", user.authorization)
+    .set("Cookie", user.sessionCookie)
     .set("X-CSRF-Token", user.csrfToken);
   return {
     get: (path: string) => withAuth(request(app).get(path)),
@@ -78,6 +82,18 @@ describe.skipIf(!testDatabaseIsLocal)("pantry low-stock API and PostgreSQL persi
 
   beforeEach(() => {
     testUserIds.length = 0;
+  });
+
+  it("authenticates with the session cookie and rejects bearer-only requests", async () => {
+    const user = await createTestUser();
+
+    const cookieResponse = await authenticated(user).get("/api/pantry-items");
+    expect(cookieResponse.status).toBe(200);
+
+    const bearerResponse = await request(app)
+      .get("/api/pantry-items")
+      .set("Authorization", `Bearer ${user.sessionToken}`);
+    expect(bearerResponse.status).toBe(401);
   });
 
   afterEach(async () => {
