@@ -72,9 +72,10 @@ Sage is a voice-enabled pantry management application with AI meal suggestions. 
 Environment variables for the active application:
 
 - `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_CA_CERT_PATH` - Production only: path to the externally mounted PostgreSQL PEM CA certificate used for TLS verification; not required for local development
 - `OPENAI_API_KEY` - For the pantry assistant and text-to-speech routes
 
-The backend connects to local/development PostgreSQL without SSL. In production (`NODE_ENV=production`), it requires SSL; configure a PostgreSQL service that supports TLS.
+The application runtime and migration CLI connect to local/development PostgreSQL without SSL. In production, both require `DATABASE_CA_CERT_PATH` and use CA-backed TLS with `rejectUnauthorized: true`; the production `DATABASE_URL` must use a DNS hostname for certificate hostname verification. Mount the CA certificate from deployment configuration and do not commit it or a real database URL. Production database provisioning and TLS have not been verified against a real provider.
 
 ## Security Features
 - Bcrypt password hashing (bcryptjs for Replit compatibility)
@@ -156,7 +157,7 @@ The backend connects to local/development PostgreSQL without SSL. In production 
 - **Database**: Connects lazily on first API request
 
 ## Next Steps
-Production deployment is not yet confirmed. Before publishing, select and provision a PostgreSQL database, configure `DATABASE_URL` and (if AI features are required) `OPENAI_API_KEY`, review and apply migrations to the intended database, and verify the deployed service. Do not run migrations against an unknown or non-disposable database.
+Production deployment is not yet confirmed. Before publishing, select and provision a PostgreSQL database, configure `DATABASE_URL`, mount a trusted CA certificate and set `DATABASE_CA_CERT_PATH`, and configure `OPENAI_API_KEY` if AI features are required. Review and apply migrations as a separate manual release step, then verify the deployed service. The application does not migrate at startup. No production backup/restore, rollback, or post-migration verification procedure has been established. Do not run migrations against an unknown or non-disposable database.
 
 ## Development
 ```bash

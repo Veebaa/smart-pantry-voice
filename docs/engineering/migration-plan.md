@@ -10,7 +10,7 @@
 
 **Scope:** Incremental transformation of the existing Sage codebase from its current mixed-concern architecture to the target Sage 2.0 architecture defined in the Architecture Decision Records.
 
-**Implementation note (25 November 2026):** The active application has already moved from the former Supabase implementation to React + TypeScript + Vite, Express + Node.js, PostgreSQL, Drizzle ORM, and OpenAI integration. This document's Supabase references describe that earlier state and are historical; PostgreSQL with Drizzle is current. npm is the package manager. Configure `DATABASE_URL` and `OPENAI_API_KEY`; apply versioned migrations to a new, empty database with `npm run db:migrate`, and use `npm run db:push` only for local development. Production database provisioning and verification have not been completed.
+**Implementation note (25 November 2026):** The active application has already moved from the former Supabase implementation to React + TypeScript + Vite, Express + Node.js, PostgreSQL, Drizzle ORM, and OpenAI integration. This document's Supabase references describe that earlier state and are historical; PostgreSQL with Drizzle is current. npm is the package manager. Configure `DATABASE_URL` and `OPENAI_API_KEY`; in production, runtime and migration connections also require `DATABASE_CA_CERT_PATH` for CA-backed certificate and hostname verification. Apply versioned migrations to a new, empty database with `npm run db:migrate`, and use `npm run db:push` only for local development. Production database provisioning and verification have not been completed.
 
 ---
 

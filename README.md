@@ -159,11 +159,15 @@ The application will be available at `http://localhost:5000`
 
 ### PostgreSQL schema and migrations
 
-`shared/schema.ts` is the application schema. The checked-in `migrations/0000_initial_schema.sql` was generated from that schema. For a new, empty database, set `DATABASE_URL` in `.env` and run `npm run db:migrate` before starting the application. Local and development database connections do not use SSL, so a local PostgreSQL instance can be used without TLS. When `NODE_ENV=production`, the backend requires SSL for PostgreSQL connections; configure a production PostgreSQL service that supports TLS. Production database provisioning and deployment have not been verified.
+`shared/schema.ts` is the application schema. The checked-in `migrations/0000_initial_schema.sql` was generated from that schema. For a new, empty database, set `DATABASE_URL` in `.env` and run `npm run db:migrate` before starting the application. Local and development application connections do not use SSL, so a local PostgreSQL instance can be used without TLS. In production, both the application runtime and Drizzle migrations require a DNS database hostname and `DATABASE_CA_CERT_PATH`, a path to an externally mounted PEM CA certificate. Both configure postgres-js with that CA and `rejectUnauthorized: true`, which verifies the certificate chain and hostname. Production database provisioning and deployment have not been verified.
 
 When the Drizzle schema changes, generate and review a migration with `npm run db:generate`, then commit the SQL and metadata under `migrations/`. Apply reviewed migrations with `npm run db:migrate`. `db:push` is retained for local development only.
 
 The initial migration is for an empty database. Do not run it against an existing database that already contains application tables unless that database has first been safely baselined against the migration history. Back up existing data and agree on a baseline/adoption plan before using versioned migrations on it. The setup steps above do not reset a database.
+
+Migrations are a separate, manual operation; application startup does not run them. `npm run db:migrate` requires `DATABASE_URL`. The Drizzle config parses its hostname, port, database, and credentials into postgres-js host options and applies the same CA-backed `ssl` object used by the runtime; URL query options are not forwarded by this config. `DATABASE_CA_CERT_PATH` must be readable by the migration process. No certificate or connection URL is stored in the repository. The migration runner creates its `drizzle` migration bookkeeping schema/table, then applies each migration transactionally. It does not inspect or baseline existing application tables. If an initial-migration table already exists but is not recorded as applied, its `CREATE TABLE` will fail; resolve that through a reviewed baseline/adoption plan, not by assuming the data will be preserved or reconciled automatically.
+
+Production database provisioning and migrations have not been verified. There is no established or tested production procedure for backups, restore, migration rollback, or post-migration schema verification. Define and rehearse those procedures against a disposable database before using production data. Drizzle migrations have no down-migration/rollback script in this repository; recovery would require a tested restore or a reviewed forward migration.
 
 ### Using Docker
 
@@ -279,8 +283,11 @@ For local development, configure `DATABASE_URL` and `OPENAI_API_KEY` in `.env` a
 ```env
 NODE_ENV=production
 DATABASE_URL=postgresql://user:password@host:5432/sage
+DATABASE_CA_CERT_PATH=<path-to-mounted-postgresql-ca.pem>
 OPENAI_API_KEY=your_openai_key
 ```
+
+`DATABASE_URL` and the CA file must be supplied through the production secret/configuration system. The CA path is deployment-specific; mount the CA certificate from a trusted source and set `DATABASE_CA_CERT_PATH` to its mounted path. Do not commit the certificate or a real database URL. Production database provisioning and TLS have not been verified against a real provider.
 
 ## CI/CD Pipeline
 

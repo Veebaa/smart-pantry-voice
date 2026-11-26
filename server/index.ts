@@ -11,9 +11,13 @@ import {
   securityHeadersMiddleware,
   startCsrfTokenCleanup,
 } from "./security.js";
+import { assertProductionDatabaseTlsConfiguration } from "./databaseTls.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Fail before listening if production TLS verification is not fully configured.
+assertProductionDatabaseTlsConfiguration();
 
 console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
