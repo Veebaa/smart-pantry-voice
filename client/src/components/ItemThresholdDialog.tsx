@@ -45,8 +45,6 @@ export const ItemThresholdDialog = ({
         lowStockThreshold: lowThreshold.trim() !== "" ? parseFloat(lowThreshold) : null,
       };
 
-      console.log("Saving item data:", updateData);
-
       await apiRequest("PATCH", `/api/pantry-items/${itemId}`, updateData);
 
       toast.success("Item settings updated");

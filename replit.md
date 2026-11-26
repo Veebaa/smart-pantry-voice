@@ -278,7 +278,12 @@ Security events logged for:
 - CSRF failures
 - Validation errors
 
-Logs kept for audit trail analysis (last 1000 events in memory, integrate with external service for production).
+The in-memory audit buffer retains up to 1000 event categories, timestamps, and client IPs; it does not retain caller-provided detail strings. Production external log-service integration is not currently configured.
+
+### CORS and API Logging
+- Production cross-origin browser access requires exact HTTP(S) origins in the comma-separated `CORS_ALLOWED_ORIGINS` environment variable.
+- Development allows localhost and loopback origins. Requests without `Origin` remain usable without CORS headers.
+- API request logs record method, path, status, and duration; response bodies and request credentials are not logged.
 
 ## Notes
 - The pantry assistant and text-to-speech routes call OpenAI using the server-side OPENAI_API_KEY
@@ -286,4 +291,4 @@ Logs kept for audit trail analysis (last 1000 events in memory, integrate with e
 - Browser may cache old code - do a hard refresh (Ctrl+Shift+R) if issues occur
 - All API endpoints require authentication except signup/signin
 - **OWASP Compliance**: Implementation follows OWASP Top 10 best practices
-- For production deployment, integrate external logging (Sentry, LogRocket) for security event monitoring
+- Production deployment and external log-service integration have not been verified.

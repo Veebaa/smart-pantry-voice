@@ -298,11 +298,6 @@ export function sendSecureError(
   message: string,
   internalError?: Error
 ) {
-  // Log internal error details for debugging (in production logs only)
-  if (process.env.NODE_ENV === "production" && internalError) {
-    console.error("[security] Error:", internalError);
-  }
-
   // Send generic error to client in production
   const clientMessage =
     process.env.NODE_ENV === "production"
@@ -362,7 +357,7 @@ export function logSecurityEvent(
     type,
     ip: getClientIp(req),
     timestamp: new Date(),
-    details,
+    details: sanitizeSecurityDetails(type, details),
   };
 
   securityLog.push(event);
@@ -374,8 +369,14 @@ export function logSecurityEvent(
 
   // Log to console in production (should use external service)
   if (process.env.NODE_ENV === "production") {
-    console.warn(`[security] ${type}: ${details} from ${event.ip}`);
+    console.warn(`[security] ${type}: ${event.details} from ${event.ip}`);
   }
+}
+
+function sanitizeSecurityDetails(type: SecurityEvent["type"], _details: string): string {
+  // Caller-provided detail strings may contain arbitrary request or provider data.
+  // Retain the stable event category, never free-form values.
+  return `${type} event`;
 }
 
 /**

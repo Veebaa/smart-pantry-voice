@@ -50,6 +50,12 @@ router.use(async (_req: Request, _res: Response, next: NextFunction) => {
 
 const db = () => getDb();
 
+function logRouteError(req: Request, error: unknown) {
+  if (error instanceof z.ZodError) return;
+  const errorType = error instanceof Error ? error.name : "UnknownError";
+  console.error(`[api] ${req.method} ${req.path} failed (${errorType})`);
+}
+
 /**
  * POST /api/auth/signup
  * Register a new user with email and password
@@ -108,8 +114,9 @@ router.post("/api/auth/signup", authRateLimiter, async (req, res) => {
       csrfToken,
     });
   } catch (error: any) {
+    logRouteError(req, error);
     sendSecureError(res, 500, "Signup failed", error);
-    logSecurityEvent("auth_failure", req, `Signup error: ${error.message}`);
+    logSecurityEvent("auth_failure", req, "Signup failed due to an internal error");
   }
 });
 
@@ -166,8 +173,9 @@ router.post("/api/auth/signin", loginRateLimiter, async (req, res) => {
       csrfToken,
     });
   } catch (error: any) {
+    logRouteError(req, error);
     sendSecureError(res, 500, "Signin failed", error);
-    logSecurityEvent("auth_failure", req, `Signin error: ${error.message}`);
+    logSecurityEvent("auth_failure", req, "Signin failed due to an internal error");
   }
 });
 
@@ -203,7 +211,8 @@ router.get("/api/pantry-items", requireAuth, async (req, res) => {
       .orderBy(desc(pantryItems.addedAt));
     res.json(items);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -215,10 +224,11 @@ router.post("/api/pantry-items", requireAuth, async (req, res) => {
     if (isLow) await addLowStockItemToShoppingList(item.userId, item.name);
     res.json(item);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -266,10 +276,11 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
     
     res.json(item);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -308,7 +319,8 @@ router.delete("/api/pantry-items/:id", requireAuth, async (req, res) => {
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -320,7 +332,8 @@ router.get("/api/user-settings", requireAuth, async (req, res) => {
       .limit(1);
     res.json(settings || null);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -344,10 +357,11 @@ router.post("/api/user-settings", requireAuth, async (req, res) => {
     
     res.json(settings);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -359,7 +373,8 @@ router.get("/api/favorite-recipes", requireAuth, async (req, res) => {
       .orderBy(desc(favoriteRecipes.createdAt));
     res.json(recipes);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -400,11 +415,11 @@ router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
     }).returning();
     res.json(recipe);
   } catch (error: any) {
-    console.error("Error saving favorite recipe:", error);
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -415,7 +430,8 @@ router.delete("/api/favorite-recipes/:id", requireAuth, async (req, res) => {
       .where(and(eq(favoriteRecipes.id, id), eq(favoriteRecipes.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -427,7 +443,8 @@ router.get("/api/shopping-list", requireAuth, async (req, res) => {
       .orderBy(desc(shoppingListItems.createdAt));
     res.json(items);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -449,7 +466,8 @@ router.post("/api/shopping-list", requireAuth, async (req, res) => {
     
     res.json(item);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -470,7 +488,8 @@ router.patch("/api/shopping-list/:id", requireAuth, async (req, res) => {
     
     res.json(item);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -481,7 +500,8 @@ router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
       .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -493,7 +513,8 @@ router.get("/api/recipe-history", requireAuth, async (req, res) => {
       .orderBy(desc(recipeHistory.madeAt));
     res.json(history);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -515,7 +536,8 @@ router.post("/api/recipe-history", requireAuth, async (req, res) => {
     
     res.json(entry);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -535,7 +557,8 @@ router.patch("/api/recipe-history/:id", requireAuth, async (req, res) => {
     
     res.json(entry);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -546,7 +569,8 @@ router.delete("/api/recipe-history/:id", requireAuth, async (req, res) => {
       .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -563,7 +587,8 @@ router.get("/api/action-history", requireAuth, async (req, res) => {
       .limit(20);
     res.json(actions);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -668,8 +693,8 @@ router.post("/api/undo", requireAuth, async (req, res) => {
       undoneCount: actionsToUndo.length 
     });
   } catch (error: any) {
-    console.error("Undo error:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -796,7 +821,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
+      return res.status(500).json({ error: "AI service is unavailable" });
     }
 
     // Get low stock items for shopping list
@@ -958,9 +983,8 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return res.status(500).json({ error: `AI gateway error: ${response.status}` });
+      console.error(`[ai] Gateway returned HTTP ${response.status}`);
+      return res.status(502).json({ error: "AI request failed" });
     }
 
     const aiResponse = await response.json() as any;
@@ -1225,8 +1249,8 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
 
     res.json(sageResponse);
   } catch (error: any) {
-    console.error("Error in pantry-assistant:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1240,7 +1264,7 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
+      return res.status(500).json({ error: "Speech service is unavailable" });
     }
 
     const VOICE_MAP: Record<string, string> = {
@@ -1269,9 +1293,8 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI TTS API error:", response.status, errorText);
-      return res.status(response.status).json({ error: `OpenAI TTS API error: ${response.status}`, details: errorText });
+      console.error(`[ai] TTS provider returned HTTP ${response.status}`);
+      return res.status(502).json({ error: "Speech generation failed" });
     }
 
     const audioBuffer = await response.arrayBuffer();
@@ -1279,8 +1302,8 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
 
     res.json({ audioContent: base64Audio });
   } catch (error: any) {
-    console.error("Error in openai-tts:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

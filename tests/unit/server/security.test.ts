@@ -8,8 +8,36 @@ import {
   sanitizeNumber,
   getSecureCookieOptions,
   securityHeadersMiddleware,
+  sendSecureError,
+  logSecurityEvent,
+  getSecurityLog,
 } from '../../../server/security.js';
 import type { Request, Response } from 'express';
+
+describe('safe error and security logging', () => {
+  it('does not expose internal error details to clients', () => {
+    const json = vi.fn();
+    const status = vi.fn().mockReturnValue({ json });
+    const previousEnvironment = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      sendSecureError({ status } as unknown as Response, 500, 'Failed', new Error('database password=secret-value'));
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnvironment;
+    }
+    expect(json).toHaveBeenCalledWith({ error: 'An error occurred. Please try again.' });
+  });
+
+  it('does not retain free-form email, credential, token, or provider details in security events', () => {
+    const before = getSecurityLog().length;
+    const sensitiveDetails = 'person@example.test password=hunter2 Authorization: Bearer abcdef0123456789 OPENAI_API_KEY=sk-test';
+    logSecurityEvent('auth_failure', { headers: {}, socket: {} } as Request, sensitiveDetails);
+    const event = getSecurityLog()[before];
+    expect(event.details).toBe('auth_failure event');
+    expect(event.details).not.toContain(sensitiveDetails);
+  });
+});
 
 describe('Security headers by environment', () => {
   const collectHeaders = (environment: string) => {

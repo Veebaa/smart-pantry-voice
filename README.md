@@ -117,8 +117,10 @@ This project implements OWASP security best practices:
 - **Input Validation**: Zod schemas with sanitization against XSS/SQL injection
 - **Security Headers**: X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy
 - **Audit Logging**: Security event tracking for authentication failures and rate limits
+- **Credentialed CORS**: Production browser origins are explicitly configured with the comma-separated `CORS_ALLOWED_ORIGINS` environment variable. No production origin is assumed; development allows localhost and loopback origins.
+- **Sensitive Logging**: API access logs record method, path, status, and duration without response bodies. Client-side diagnostics do not print pantry request/response data.
 - **Parameterized Queries**: Drizzle ORM prevents SQL injection
-- **Error Handling**: Generic error messages prevent user enumeration
+- **Error Handling**: Authentication and unexpected server errors return safe client messages; validation errors retain schema-defined feedback.
 
 See [Security Architecture](#security-architecture-1) for detailed implementation.
 

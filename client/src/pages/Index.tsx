@@ -117,7 +117,6 @@ const Index = () => {
 
   const fetchPantryItems = async () => {
     try {
-      console.log("Fetching pantry items (API)...");
       const data = await apiRequest("GET", "/api/pantry-items");
       setPantryItems(data || []);
       return data || [];
@@ -164,7 +163,6 @@ const Index = () => {
       );
 
       if (autoAddItem) {
-        console.log(`Auto-adding obvious item: ${autoAddItem}`);
         const category = defaultLocations[autoAddItem];
 
         try {
@@ -193,9 +191,7 @@ const Index = () => {
 
         speak(autoAddResponse.speak, {
           onend: async () => {
-            console.log("Fetching pantry items (after auto-add)...");
-            const items = await fetchPantryItems();
-            console.log("Current pantry:", items);
+            await fetchPantryItems();
             const voiceInputEl = document.getElementById("voice-input-button");
             if (voiceInputEl) voiceInputEl.click();
           },
@@ -205,7 +201,6 @@ const Index = () => {
         return;
       }
 
-      console.log("Preparing invocation body: fetching current pantry items to include in payload...");
       const currentPantryItems = await fetchPantryItems();
 
       const invocationBody: Record<string, any> = lastItem
@@ -225,17 +220,14 @@ const Index = () => {
             pantryItems: currentPantryItems,
           };
 
-      console.log("Sending to Pantry Assistant:", invocationBody);
 
       const data = await apiRequest("POST", "/api/pantry-assistant", invocationBody);
 
-      console.log("Raw Sage response from API:", data);
 
       if (data.action === "ask") {
         // Check both root level and payload for pending_item
         const pendingItem = data.pending_item || data.payload?.pending_item;
         if (pendingItem) {
-          console.log("Pending item set:", pendingItem);
           setLastItem(pendingItem);
         }
         const speakText = data.speak || `Where should ${pendingItem || 'that'} go? Fridge, freezer, cupboard, or pantry?`;
@@ -251,13 +243,11 @@ const Index = () => {
       }
 
       if (data.action === "add_item") {
-        console.log("Item added, clearing pending item:", lastItem);
         setLastItem(null);
         toast.success("Pantry updated!");
       }
 
       if (data.action === "update_item") {
-        console.log("Item updated (marked as low stock):", data.payload);
         setLastItem(null);
         toast.success("Item marked as running low!");
         // Refresh pantry items to show updated status
@@ -265,12 +255,10 @@ const Index = () => {
       }
 
       if (data.action === "generate_shopping_list") {
-        console.log("Shopping list generated:", data.payload?.shopping_list);
         toast.success("Shopping list ready!");
       }
 
       if (data.action === "none") {
-        console.log("Action none received, pending item cleared:", lastItem);
         setLastItem(null);
         toast.info(data.speak || "Action skipped");
       }
@@ -333,9 +321,7 @@ const Index = () => {
       if (data.speak) {
         speak(data.speak, {
           onend: async () => {
-            console.log("Fetching pantry items (after API response)...");
-            const items = await fetchPantryItems();
-            console.log("Current pantry:", items);
+            await fetchPantryItems();
             await fetchShoppingListItems();
 
             const voiceInputEl = document.getElementById("voice-input-button");
@@ -346,9 +332,7 @@ const Index = () => {
           },
         });
       } else {
-        console.log("Fetching pantry items (after API response - no speak)...");
-        const items = await fetchPantryItems();
-        console.log("Current pantry:", items);
+        await fetchPantryItems();
         await fetchShoppingListItems();
         const voiceInputEl = document.getElementById("voice-input-button");
         if (voiceInputEl && !isSpeaking) voiceInputEl.click();
