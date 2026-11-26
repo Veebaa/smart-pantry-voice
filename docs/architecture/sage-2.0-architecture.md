@@ -1,8 +1,12 @@
 # Sage 2.0 Architecture
 
+> Historical references to Supabase in this living architecture and linked discovery notes describe the previous implementation. Supabase is not part of the active application configuration.
+
 **Version:** 2.0 (Draft)
 
 **Status:** Living Document
+
+**Implementation note (25 November 2026):** This document describes the target Sage 2.0 architecture. The current application runs as a React + TypeScript + Vite frontend with an Express + Node.js backend, PostgreSQL, Drizzle ORM, and OpenAI integration. npm is the package manager. `DATABASE_URL` configures PostgreSQL and `OPENAI_API_KEY` configures AI and TTS. In production, runtime and Drizzle migration connections also require `DATABASE_CA_CERT_PATH` for CA-backed certificate and hostname verification; development database connections remain non-TLS. Drizzle migrations are in `migrations/`; use `npm run db:migrate` for a new, empty database and `npm run db:push` only for local development. Production database provisioning and verification have not been completed. References below to Supabase describe historical discovery context unless explicitly stated otherwise.
 
 **Last Updated:** 2 August 2026
 

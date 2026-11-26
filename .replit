@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "bun", "postgresql-16"]
+modules = ["nodejs-20", "web", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -7,8 +7,8 @@ channel = "stable-25_05"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bun", "run", "start"]
-build = ["bun", "run", "build"]
+run = ["npm", "run", "start"]
+build = ["npm", "run", "build"]
 
 [workflows]
 runButton = "Project"
@@ -28,7 +28,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bun run dev"
+args = "npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]

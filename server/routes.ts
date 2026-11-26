@@ -12,7 +12,7 @@ import {
   insertPantryItemSchema,
   insertUserSettingsSchema,
 } from "../shared/schema.js";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { requireAuth, hashPassword, comparePassword, createSession } from "./auth.js";
 import { z } from "zod";
 import {
@@ -29,6 +29,7 @@ import {
   sendSecureError,
 } from "./security.js";
 import { signinSchema, signupSchema, getValidationError } from "./validators.js";
+import { isPantryItemLow } from "../shared/lowStock.js";
 
 const router = Router();
 
@@ -48,6 +49,13 @@ router.use(async (_req: Request, _res: Response, next: NextFunction) => {
 });
 
 const db = () => getDb();
+type ShoppingListTransaction = Parameters<Parameters<ReturnType<typeof db>["transaction"]>[0]>[0];
+
+function logRouteError(req: Request, error: unknown) {
+  if (error instanceof z.ZodError) return;
+  const errorType = error instanceof Error ? error.name : "UnknownError";
+  console.error(`[api] ${req.method} ${req.path} failed (${errorType})`);
+}
 
 /**
  * POST /api/auth/signup
@@ -103,12 +111,12 @@ router.post("/api/auth/signup", authRateLimiter, async (req, res) => {
 
     res.status(201).json({
       user: { id: user.id, email: user.email },
-      token: session.token,
       csrfToken,
     });
   } catch (error: any) {
+    logRouteError(req, error);
     sendSecureError(res, 500, "Signup failed", error);
-    logSecurityEvent("auth_failure", req, `Signup error: ${error.message}`);
+    logSecurityEvent("auth_failure", req, "Signup failed due to an internal error");
   }
 });
 
@@ -161,24 +169,21 @@ router.post("/api/auth/signin", loginRateLimiter, async (req, res) => {
 
     res.json({
       user: { id: user.id, email: user.email },
-      token: session.token,
       csrfToken,
     });
   } catch (error: any) {
+    logRouteError(req, error);
     sendSecureError(res, 500, "Signin failed", error);
-    logSecurityEvent("auth_failure", req, `Signin error: ${error.message}`);
+    logSecurityEvent("auth_failure", req, "Signin failed due to an internal error");
   }
 });
 
-router.post("/api/auth/signout", async (req, res) => {
-  // Get token from Authorization header or cookie
-  const authHeader = req.headers.authorization;
-  let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  
-  if (!token) {
-    token = req.cookies.session_token;
-  }
-  
+router.get("/api/auth/csrf-token", requireAuth, (req, res) => {
+  res.json({ csrfToken: createCsrfToken(req.sessionId!) });
+});
+
+router.post("/api/auth/signout", requireAuth, async (req, res) => {
+  const token = req.cookies?.session_token;
   if (token) {
     await db().delete(sessions).where(eq(sessions.token, token));
   }
@@ -198,20 +203,24 @@ router.get("/api/pantry-items", requireAuth, async (req, res) => {
       .orderBy(desc(pantryItems.addedAt));
     res.json(items);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 router.post("/api/pantry-items", requireAuth, async (req, res) => {
   try {
     const validatedData = insertPantryItemSchema.parse({ ...req.body, userId: req.user!.id });
-    const [item] = await db().insert(pantryItems).values(validatedData as any).returning();
+    const isLow = isPantryItemLow(validatedData.currentQuantity, validatedData.lowStockThreshold);
+    const [item] = await db().insert(pantryItems).values({ ...validatedData, isLow } as any).returning();
+    if (isLow) await addLowStockItemToShoppingList(item.userId, item.name);
     res.json(item);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -224,15 +233,24 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
       category: z.enum(["fridge", "freezer", "cupboard", "pantry_staples"]).optional(),
       quantity: z.string().optional(),
       isLow: z.boolean().optional(),
-      currentQuantity: z.number().optional(),
-      lowStockThreshold: z.number().optional(),
+      currentQuantity: z.number().nullable().optional(),
+      lowStockThreshold: z.number().nullable().optional(),
       expiresAt: z.string().nullable().optional(),
     });
     
     const validatedData = updateSchema.parse(req.body);
     
     // Convert expiresAt string to Date if provided
-    const updateData: any = { ...validatedData, updatedAt: new Date() };
+    const [existingItem] = await db().select().from(pantryItems)
+      .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)));
+    if (!existingItem) return res.status(404).json({ error: "Item not found" });
+
+    const currentQuantity = validatedData.currentQuantity !== undefined
+      ? validatedData.currentQuantity : existingItem.currentQuantity;
+    const lowStockThreshold = validatedData.lowStockThreshold !== undefined
+      ? validatedData.lowStockThreshold : existingItem.lowStockThreshold;
+    const isLow = isPantryItemLow(currentQuantity, lowStockThreshold);
+    const updateData: any = { ...validatedData, isLow, updatedAt: new Date() };
     if (validatedData.expiresAt !== undefined) {
       updateData.expiresAt = validatedData.expiresAt ? new Date(validatedData.expiresAt) : null;
     }
@@ -245,15 +263,46 @@ router.patch("/api/pantry-items/:id", requireAuth, async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: "Item not found" });
     }
+
+    if (isLow) await addLowStockItemToShoppingList(item.userId, item.name);
     
     res.json(item);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
+
+async function withShoppingListNameLock<T>(userId: string, name: string, operation: (tx: ShoppingListTransaction) => Promise<T>): Promise<T> {
+  const normalizedName = name.trim().toLowerCase();
+  return db().transaction(async (tx) => {
+    // Transaction-scoped advisory locks serialize all list writes for this
+    // user/name across processes without imposing uniqueness on manual items.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${userId}:${normalizedName}`}, 0))`);
+    return operation(tx);
+  });
+}
+
+async function addLowStockItemToShoppingList(userId: string, name: string) {
+  const normalizedName = name.trim().toLowerCase();
+  await withShoppingListNameLock(userId, name, async (tx) => {
+    const existingItems: (typeof shoppingListItems.$inferSelect)[] = await tx.select().from(shoppingListItems)
+      .where(eq(shoppingListItems.userId, userId));
+    const existingItem = existingItems.find(item => item.name.trim().toLowerCase() === normalizedName);
+    if (existingItem) {
+      if (existingItem.checked) {
+        await tx.update(shoppingListItems).set({ checked: false })
+          .where(eq(shoppingListItems.id, existingItem.id));
+      }
+      return;
+    }
+
+    await tx.insert(shoppingListItems).values({ userId, name, checked: false });
+  });
+}
 
 router.delete("/api/pantry-items/:id", requireAuth, async (req, res) => {
   try {
@@ -262,7 +311,8 @@ router.delete("/api/pantry-items/:id", requireAuth, async (req, res) => {
       .where(and(eq(pantryItems.id, id), eq(pantryItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -274,7 +324,8 @@ router.get("/api/user-settings", requireAuth, async (req, res) => {
       .limit(1);
     res.json(settings || null);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -298,10 +349,11 @@ router.post("/api/user-settings", requireAuth, async (req, res) => {
     
     res.json(settings);
   } catch (error: any) {
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -313,7 +365,8 @@ router.get("/api/favorite-recipes", requireAuth, async (req, res) => {
       .orderBy(desc(favoriteRecipes.createdAt));
     res.json(recipes);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -354,11 +407,11 @@ router.post("/api/favorite-recipes", requireAuth, async (req, res) => {
     }).returning();
     res.json(recipe);
   } catch (error: any) {
-    console.error("Error saving favorite recipe:", error);
+    logRouteError(req, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues[0].message });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -369,7 +422,8 @@ router.delete("/api/favorite-recipes/:id", requireAuth, async (req, res) => {
       .where(and(eq(favoriteRecipes.id, id), eq(favoriteRecipes.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -381,7 +435,8 @@ router.get("/api/shopping-list", requireAuth, async (req, res) => {
       .orderBy(desc(shoppingListItems.createdAt));
     res.json(items);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -393,16 +448,18 @@ router.post("/api/shopping-list", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Item name is required" });
     }
     
-    const [item] = await db().insert(shoppingListItems).values({
+    const insertedItems = await withShoppingListNameLock(req.user!.id, name, async (tx) => await tx.insert(shoppingListItems).values({
       userId: req.user!.id,
       name,
       quantity: quantity || null,
       checked: false,
-    }).returning();
+    }).returning());
+    const [item] = insertedItems;
     
     res.json(item);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -423,7 +480,8 @@ router.patch("/api/shopping-list/:id", requireAuth, async (req, res) => {
     
     res.json(item);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -434,7 +492,8 @@ router.delete("/api/shopping-list/:id", requireAuth, async (req, res) => {
       .where(and(eq(shoppingListItems.id, id), eq(shoppingListItems.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -446,7 +505,8 @@ router.get("/api/recipe-history", requireAuth, async (req, res) => {
       .orderBy(desc(recipeHistory.madeAt));
     res.json(history);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -468,7 +528,8 @@ router.post("/api/recipe-history", requireAuth, async (req, res) => {
     
     res.json(entry);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -488,7 +549,8 @@ router.patch("/api/recipe-history/:id", requireAuth, async (req, res) => {
     
     res.json(entry);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -499,7 +561,8 @@ router.delete("/api/recipe-history/:id", requireAuth, async (req, res) => {
       .where(and(eq(recipeHistory.id, id), eq(recipeHistory.userId, req.user!.id)));
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -516,7 +579,8 @@ router.get("/api/action-history", requireAuth, async (req, res) => {
       .limit(20);
     res.json(actions);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -598,13 +662,13 @@ router.post("/api/undo", requireAuth, async (req, res) => {
         // Undo delete from shopping list = restore
         const prevData = action.previousData as any;
         if (prevData) {
-          await db().insert(shoppingListItems).values({
+          await withShoppingListNameLock(req.user!.id, prevData.name, (tx) => tx.insert(shoppingListItems).values({
             id: action.entityId,
             userId: req.user!.id,
             name: prevData.name,
             quantity: prevData.quantity,
             checked: prevData.checked,
-          });
+          }));
           undoneItems.push(prevData.name || 'item');
         }
       }
@@ -621,8 +685,8 @@ router.post("/api/undo", requireAuth, async (req, res) => {
       undoneCount: actionsToUndo.length 
     });
   } catch (error: any) {
-    console.error("Undo error:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -749,7 +813,7 @@ router.post("/api/pantry-assistant", requireAuth, async (req, res) => {
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
+      return res.status(500).json({ error: "AI service is unavailable" });
     }
 
     // Get low stock items for shopping list
@@ -911,9 +975,8 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return res.status(500).json({ error: `AI gateway error: ${response.status}` });
+      console.error(`[ai] Gateway returned HTTP ${response.status}`);
+      return res.status(502).json({ error: "AI request failed" });
     }
 
     const aiResponse = await response.json() as any;
@@ -1102,12 +1165,13 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
       for (const item of sageResponse.payload.items) {
         if (!item.name) continue;
 
-        const [newItem] = await db().insert(shoppingListItems).values({
+        const insertedItems = await withShoppingListNameLock(req.user!.id, item.name, async (tx) => await tx.insert(shoppingListItems).values({
           userId: req.user!.id,
           name: item.name,
           quantity: item.quantity || null,
           checked: false,
-        }).returning();
+        }).returning());
+        const [newItem] = insertedItems;
         
         // Log action for undo
         await logAction(
@@ -1177,8 +1241,8 @@ Recipe preferences: ${recipeFilters?.length ? recipeFilters.join(", ") : "No spe
 
     res.json(sageResponse);
   } catch (error: any) {
-    console.error("Error in pantry-assistant:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -1192,7 +1256,7 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OPENAI_API_KEY not configured" });
+      return res.status(500).json({ error: "Speech service is unavailable" });
     }
 
     const VOICE_MAP: Record<string, string> = {
@@ -1221,9 +1285,8 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI TTS API error:", response.status, errorText);
-      return res.status(response.status).json({ error: `OpenAI TTS API error: ${response.status}`, details: errorText });
+      console.error(`[ai] TTS provider returned HTTP ${response.status}`);
+      return res.status(502).json({ error: "Speech generation failed" });
     }
 
     const audioBuffer = await response.arrayBuffer();
@@ -1231,8 +1294,8 @@ router.post("/api/openai-tts", requireAuth, async (req, res) => {
 
     res.json({ audioContent: base64Audio });
   } catch (error: any) {
-    console.error("Error in openai-tts:", error);
-    res.status(500).json({ error: error.message });
+    logRouteError(req, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

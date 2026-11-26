@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import { createCorsOptions } from "./cors.js";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
@@ -10,9 +11,13 @@ import {
   securityHeadersMiddleware,
   startCsrfTokenCleanup,
 } from "./security.js";
+import { assertProductionDatabaseTlsConfiguration } from "./databaseTls.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Fail before listening if production TLS verification is not fully configured.
+assertProductionDatabaseTlsConfiguration();
 
 console.log(`[startup] Starting server in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[startup] DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
@@ -26,12 +31,7 @@ app.set("trust proxy", 1);
 // 🛡️ Apply security headers to all responses (OWASP best practices)
 app.use(securityHeadersMiddleware);
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -74,27 +74,10 @@ if (process.env.NODE_ENV === "production") {
 app.use((req, res, next) => {
   const start = Date.now();
   const reqPath = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (reqPath.startsWith("/api")) {
-      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      log(`${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
     }
   });
 
@@ -113,17 +96,22 @@ async function initializeRoutes() {
     routesInitialized = true;
     console.log("[startup] Routes initialized");
   } catch (error) {
-    console.error("[startup] Failed to initialize routes:", error);
+    console.error(`[startup] Route initialization failed (${error instanceof Error ? error.name : "UnknownError"})`);
     routesInitializing = false;
     throw error;
   }
 }
 
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  res.status(status).json({ message });
-  console.error("[error]", err);
+  const status = Number(err.status || err.statusCode);
+  const clientError = status >= 400 && status < 500;
+  const safeStatus = clientError ? status : 500;
+  if (safeStatus >= 500) {
+    const errorType = err instanceof Error ? err.name : "UnknownError";
+    console.error(`[error] ${errorType}; status ${safeStatus}`);
+  }
+  // Error messages reaching this catch-all are not guaranteed to be safe, even for 4xx statuses.
+  res.status(safeStatus).json({ error: clientError ? "Request could not be processed" : "Internal server error" });
 });
 
 const PORT = 5000;
@@ -158,6 +146,6 @@ server.listen(PORT, "0.0.0.0", async () => {
     
     console.log("[startup] Application fully initialized");
   } catch (error) {
-    console.error("[startup] Failed during post-listen initialization:", error);
+    console.error(`[startup] Application initialization failed (${error instanceof Error ? error.name : "UnknownError"})`);
   }
 });

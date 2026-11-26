@@ -291,7 +291,7 @@ export function validateInput<T>(
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.warn("[validation] Validation error:", error.issues);
+      console.warn(`[validation] Rejected input (${error.issues.length} issue(s))`);
     }
     return null;
   }

@@ -1,6 +1,7 @@
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres, { Sql } from 'postgres';
 import * as schema from "../shared/schema.js";
+import { getPostgresSslOptions, validateRuntimeDatabaseUrl } from "./databaseTls.js";
 
 let queryClient: Sql | null = null;
 let dbInstance: PostgresJsDatabase<typeof schema> | null = null;
@@ -22,13 +23,16 @@ export async function initializeDb(): Promise<void> {
       throw new Error("DATABASE_URL must be set. Please configure the database in deployment secrets.");
     }
 
+    validateRuntimeDatabaseUrl(databaseUrl);
+    const ssl = getPostgresSslOptions();
+
     console.log(`[db] Connecting to database (production: ${isProduction})...`);
 
     queryClient = postgres(databaseUrl, {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
-      ssl: 'require',
+      ssl,
       onnotice: () => {},
     });
 

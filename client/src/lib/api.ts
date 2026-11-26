@@ -1,67 +1,73 @@
 const API_BASE_URL = "";
-const TOKEN_KEY = "sage_auth_token";
+const CSRF_TOKEN_KEY = "sage_csrf_token";
+const LEGACY_AUTH_TOKEN_KEY = "sage_auth_token";
 
-export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+export function clearLegacyAuthToken(): void {
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
 }
 
-export function setAuthToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+export function getCsrfToken(): string | null {
+  return sessionStorage.getItem(CSRF_TOKEN_KEY);
 }
 
-export function clearAuthToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+export function setCsrfToken(token: string): void {
+  sessionStorage.setItem(CSRF_TOKEN_KEY, token);
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  if (token) {
-    return { Authorization: `Bearer ${token}` };
-  }
-  return {};
+export function clearCsrfToken(): void {
+  sessionStorage.removeItem(CSRF_TOKEN_KEY);
 }
 
 export async function apiRequest(method: string, endpoint: string, data?: any) {
-  const options: RequestInit = {
+  return internalApiRequest(endpoint, {
     method,
-    credentials: 'include',
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-    },
-  };
+    ...(data ? { body: JSON.stringify(data) } : {}),
+  });
+}
 
-  if (data) {
-    options.body = JSON.stringify(data);
+async function refreshCsrfToken(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/csrf-token`, {
+    method: "GET",
+    credentials: "include",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || typeof data.csrfToken !== "string") {
+    throw new Error(data.error || "Unable to refresh CSRF token");
   }
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-
-  // Check content type to detect HTML responses (usually means routing issue)
-  const contentType = response.headers.get("content-type");
-  if (contentType && !contentType.includes("application/json")) {
-    console.error(`API returned non-JSON response for ${endpoint}:`, contentType);
-    throw new Error("Server returned an unexpected response. Please refresh the page.");
-  }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || `HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+  setCsrfToken(data.csrfToken);
+  return data.csrfToken;
 }
 
 async function internalApiRequest(endpoint: string, options: RequestInit = {}) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
+  const method = (options.method || "GET").toUpperCase();
+  const isSafeMethod = ["GET", "HEAD", "OPTIONS"].includes(method);
+  const isPreAuthEndpoint = ["/api/auth/signup", "/api/auth/signin"].includes(endpoint);
+  const requiresCsrf = !isSafeMethod && !isPreAuthEndpoint;
+  let csrfToken = requiresCsrf ? getCsrfToken() : null;
+  if (requiresCsrf && !csrfToken) csrfToken = await refreshCsrfToken();
+
+  const send = () => {
+    const headers = new Headers({
       "Content-Type": "application/json",
-      ...getAuthHeaders(),
-      ...options.headers,
-    },
-  });
+    });
+    new Headers(options.headers).forEach((value, key) => headers.set(key, value));
+    if (requiresCsrf && csrfToken) headers.set("X-CSRF-Token", csrfToken);
+
+    return fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  };
+
+  let response = await send();
+  if (requiresCsrf && response.status === 403) {
+    const error = await response.clone().json().catch(() => ({}));
+    if (error.code === "CSRF_INVALID") {
+      csrfToken = await refreshCsrfToken();
+      response = await send();
+    }
+  }
 
   // Check content type to detect HTML responses (usually means routing issue)
   const contentType = response.headers.get("content-type");
